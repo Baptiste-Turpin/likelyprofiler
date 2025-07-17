@@ -1,0 +1,10 @@
+Package: likelyprofiler
+Title: Likelihood profiles for nonlinear objective functions.
+Version: 0.0.0.9000
+Authors@R: 
+    person("Baptiste", "Turpin", , "baptiste.turpin@bsse.ethz.ch", role = c("aut", "cre"))
+Description: Simple package for likelihood profiles from general objective functions. Focus on potentially compute-intensive objective functions, with control over the number of evaluations and optimization tools.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
