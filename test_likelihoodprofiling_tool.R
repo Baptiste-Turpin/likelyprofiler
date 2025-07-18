@@ -12,12 +12,13 @@ d = 5
 
 # Set up the problem
 true_params = c(1, rep(0, d-1))
-names(true_params) = paste0("param_", 1:d)
+optimized_params = true_params + rnorm(length(true_params), sd = 0.3)
+names(true_params) = names(optimized_params) = paste0("param_", 1:d)
 bounds = list(lower = rep(-2, d), upper = rep(2, d))
 
 # Compute profile likelihood with small grid for speed
 result = computeLikelihoodProfiles(
-  params_current = true_params,
+  params_current = optimized_params,
   negLogLikelihood = mlogf,
   bounds = bounds,
   profile_options = list(
@@ -38,6 +39,9 @@ print(result$confidence_intervals)
 
 # Plot the profile likelihood
 plotLikelihoodProfiles(result,
-                       options = list(log_scale = FALSE, max_cols = 2),
+                       options = list(log_scale = FALSE, max_cols = 3,
+                                      line_x = 0.5, line_y = 1.5),
+                       plot_options = list(oma = c(1.7, 2.5, 0, 7),
+                                           mar = c(1.5, 0.25, 1.2, 0.25)),
                        true_values = true_params
 )
