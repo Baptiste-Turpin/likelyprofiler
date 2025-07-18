@@ -352,7 +352,8 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     # Extract confidence interval
     confidence_interval = extractConfidenceInterval(
       profile_data = profile_data,
-      profile_options = profile_options
+      profile_options = profile_options,
+      optimal_param_value = params_current[param_index]
     )
 
     return(list(
@@ -578,9 +579,10 @@ evaluateConditionalCost = function(free_params, param_index, fixed_value,
 #'
 #' @param profile_data Profile data structure
 #' @param profile_options Profiling options
+#' @param optimal_param_value Optimal parameter value from params_current
 #' @return Numeric vector [lower, upper] confidence bounds
 #' @keywords internal
-extractConfidenceInterval = function(profile_data, profile_options) {
+extractConfidenceInterval = function(profile_data, profile_options, optimal_param_value) {
 
   if (profile_data$failed || length(profile_data$profile_costs) == 0) {
     return(c(NA, NA))
@@ -593,7 +595,8 @@ extractConfidenceInterval = function(profile_data, profile_options) {
   confidence_bounds = findConfidenceBounds(
     grid_values = profile_data$grid_values,
     profile_costs = profile_data$profile_costs,
-    threshold_cost = threshold_cost
+    threshold_cost = threshold_cost,
+    optimal_param_value = optimal_param_value
   )
 
   return(confidence_bounds)
@@ -604,63 +607,94 @@ extractConfidenceInterval = function(profile_data, profile_options) {
 #' @param grid_values Grid parameter values
 #' @param profile_costs Profile cost values
 #' @param threshold_cost Threshold cost for confidence level
+#' @param optimal_param_value Optimal parameter value from params_current
 #' @return Numeric vector [lower, upper] confidence bounds
 #' @keywords internal
-findConfidenceBounds = function(grid_values, profile_costs, threshold_cost) {
+findConfidenceBounds = function(grid_values, profile_costs, threshold_cost, optimal_param_value) {
 
   if (length(grid_values) < 2) {
     return(c(NA, NA))
   }
+
+  # browser()
 
   # Sort by grid values
   sorted_indices = order(grid_values)
   sorted_grid = grid_values[sorted_indices]
   sorted_costs = profile_costs[sorted_indices]
 
-  # Find crossings of threshold
-  below_threshold = sorted_costs <= threshold_cost
+  n = length(sorted_grid)
 
-  # Find lower bound (first crossing from left)
-  lower_bound = NA
-  for (i in 1:(length(sorted_costs) - 1)) {
-    if (below_threshold[i] != below_threshold[i + 1]) {
-      # Linear interpolation
-      if (below_threshold[i] && !below_threshold[i + 1]) {
-        # Crossing from below to above threshold (lower bound)
-        t = (threshold_cost - sorted_costs[i]) / (sorted_costs[i + 1] - sorted_costs[i])
-        lower_bound = sorted_grid[i] + t * (sorted_grid[i + 1] - sorted_grid[i])
-        break
+  # Convert costs to likelihood ratios (following MATLAB approach)
+  ll_ratios = 2 * (sorted_costs - min(sorted_costs, na.rm = TRUE))
+
+  # Find crossings where likelihood ratio crosses threshold
+  crossings = c()
+
+  for (i in 1:(n-1)) {
+    # Check if threshold is crossed between points i and i+1
+    if ((ll_ratios[i] <= threshold_cost && ll_ratios[i+1] > threshold_cost) ||
+        (ll_ratios[i] > threshold_cost && ll_ratios[i+1] <= threshold_cost)) {
+
+      # Linear interpolation to find exact crossing point
+      if (abs(ll_ratios[i+1] - ll_ratios[i]) > 1e-10) {
+        t = (threshold_cost - ll_ratios[i]) / (ll_ratios[i+1] - ll_ratios[i])
+        crossing_point = sorted_grid[i] + t * (sorted_grid[i+1] - sorted_grid[i])
+        crossings = c(crossings, crossing_point)
       }
     }
   }
 
-  # Find upper bound (last crossing from right)
-  upper_bound = NA
-  for (i in length(sorted_costs):2) {
-    if (below_threshold[i] != below_threshold[i - 1]) {
-      # Linear interpolation
-      if (below_threshold[i] && !below_threshold[i - 1]) {
-        # Crossing from above to below threshold (upper bound)
-        t = (threshold_cost - sorted_costs[i - 1]) / (sorted_costs[i] - sorted_costs[i - 1])
-        upper_bound = sorted_grid[i - 1] + t * (sorted_grid[i] - sorted_grid[i - 1])
-        break
-      }
+  # Handle edge cases
+  if (length(crossings) == 0) {
+    # No crossings found - check if all points are within threshold
+    within_threshold = ll_ratios <= threshold_cost
+    if (sum(within_threshold) == 0) {
+      return(c(NA, NA))
+    } else if (all(within_threshold)) {
+      # All points within threshold - use grid extremes
+      return(c(min(sorted_grid), max(sorted_grid)))
+    } else {
+      # Some points within threshold - use their extremes
+      return(c(min(sorted_grid[within_threshold]), max(sorted_grid[within_threshold])))
     }
   }
 
-  # If no crossings found, use grid extremes where cost is below threshold
-  if (is.na(lower_bound)) {
-    valid_indices = which(below_threshold)
-    if (length(valid_indices) > 0) {
-      lower_bound = min(sorted_grid[valid_indices])
+  # Find regions within threshold
+  within_threshold = ll_ratios <= threshold_cost
+
+  if (sum(within_threshold) == 0) {
+    return(c(NA, NA))
+  }
+
+  # Determine bounds based on crossings and threshold regions
+  sorted_crossings = sort(crossings)
+
+  # Strategy: find the largest continuous region within threshold
+  # that contains the minimum likelihood point (optimal parameter)
+  lower_bound = min(sorted_grid[within_threshold])
+  upper_bound = max(sorted_grid[within_threshold])
+
+  # Refine bounds using crossings if they exist
+  if (length(sorted_crossings) > 0) {
+    # Find crossings that bracket the optimal parameter value
+    lower_crossings = sorted_crossings[sorted_crossings <= optimal_param_value]
+    upper_crossings = sorted_crossings[sorted_crossings >= optimal_param_value]
+
+    if (length(lower_crossings) > 0) {
+      lower_bound = max(lower_crossings)
+    }
+
+    if (length(upper_crossings) > 0) {
+      upper_bound = min(upper_crossings)
     }
   }
 
-  if (is.na(upper_bound)) {
-    valid_indices = which(below_threshold)
-    if (length(valid_indices) > 0) {
-      upper_bound = max(sorted_grid[valid_indices])
-    }
+  # Final validation
+  if (lower_bound > upper_bound) {
+    temp = lower_bound
+    lower_bound = upper_bound
+    upper_bound = temp
   }
 
   return(c(lower_bound, upper_bound))

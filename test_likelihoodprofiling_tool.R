@@ -11,14 +11,14 @@ gamma = 8   #power law for the Gaussian mixture
 d = 5
 
 # Set up the problem
-true_params = rep(1, d)
+true_params = c(1, rep(0, d-1))
 names(true_params) = paste0("param_", 1:d)
 bounds = list(lower = rep(-2, d), upper = rep(2, d))
 
 # Compute profile likelihood with small grid for speed
 result = computeLikelihoodProfiles(
   params_current = true_params,
-  cost_to_optimize = mlogf,
+  negLogLikelihood = mlogf,
   bounds = bounds,
   profile_options = list(
     grid_method = "adaptive",
