@@ -8,9 +8,10 @@
 #' @param bounds List with elements 'lower' and 'upper' containing parameter bounds
 #' @param profile_options List of profiling options (see Details)
 #' @param optimizer Character string or function specifying optimizer (default: "optim")
+#' @param optim_options List of optimizer-specific arguments (default: list())
 #' @param verbose Logical indicating whether to print progress messages
 #' @param cluster Optional cluster object for parallel computation (default: NULL)
-#' @param ... Additional arguments passed to the optimizer
+#' @param ... Additional arguments passed to the `negLogLikelihood` function
 #'
 #' @details
 #' The \code{profile_options} list can contain:
@@ -23,9 +24,16 @@
 #'
 #' The \code{optimizer} can be:
 #' \itemize{
-#'   \item \code{"optim"}: Use base R optim() with method and control via ...
+#'   \item \code{"optim"}: Use base R optim() with options via optim_options
 #'   \item \code{"deoptim"}: Use DEoptim package (must be installed)
 #'   \item A function with signature: function(fn, par, lower, upper, ...)
+#' }
+#'
+#' The \code{optim_options} list can contain optimizer-specific arguments:
+#' \itemize{
+#'   \item For optim: \code{method}, \code{control}, etc.
+#'   \item For deoptim: \code{itermax}, \code{NP}, etc.
+#'   \item For custom optimizers: any arguments the optimizer function accepts
 #' }
 #'
 #' @return List containing:
@@ -65,9 +73,11 @@
 #'     max_grid_range_multiplier = 1.0
 #'   ),
 #'   optimizer = "optim",
-#'   verbose = FALSE,  # Suppress output for clean example
-#'   method = "L-BFGS-B",
-#'   control = list(maxit = 100)
+#'   optim_options = list(
+#'     method = "L-BFGS-B",
+#'     control = list(maxit = 100)
+#'   ),
+#'   verbose = FALSE  # Suppress output for clean example
 #' )
 #'
 #' # View results
@@ -81,8 +91,10 @@
 #'   negLogLikelihood = quadratic_likelihood,
 #'   bounds = bounds,
 #'   optimizer = "deoptim",
-#'   itermax = 100,
-#'   NP = 20
+#'   optim_options = list(
+#'     itermax = 100,
+#'     NP = 20
+#'   )
 #' )
 #'
 #' # Custom optimizer example
@@ -104,6 +116,7 @@ computeLikelihoodProfiles = function(params_current,
                                      bounds,
                                      profile_options = list(),
                                      optimizer = "optim",
+                                     optim_options = list(),
                                      verbose = TRUE,
                                      cluster = NULL,
                                      ...) {
@@ -138,7 +151,10 @@ computeLikelihoodProfiles = function(params_current,
   profile_options = modifyList(default_options, profile_options)
 
   # Validate optimizer
-  optimizer_info = validateAndSetupOptimizer(optimizer, ...)
+  optimizer_info = validateAndSetupOptimizer(optimizer, optim_options)
+
+  # Capture likelihood function arguments
+  likelihood_args = list(...)
 
   if (verbose) {
     cat(sprintf("Computing profile likelihood for %d parameters using %s grid...\n",
@@ -177,6 +193,7 @@ computeLikelihoodProfiles = function(params_current,
         bounds = bounds,
         profile_options = profile_options,
         optimizer_info = optimizer_info,
+        likelihood_args = likelihood_args,
         verbose = FALSE  # Silent in parallel
       )
     })
@@ -201,6 +218,7 @@ computeLikelihoodProfiles = function(params_current,
         bounds = bounds,
         profile_options = profile_options,
         optimizer_info = optimizer_info,
+        likelihood_args = likelihood_args,
         verbose = verbose
       )
 
@@ -244,17 +262,17 @@ computeLikelihoodProfiles = function(params_current,
 #' Validate and Setup Optimizer
 #'
 #' @param optimizer Character string or function specifying optimizer
-#' @param ... Additional arguments for optimizer
+#' @param optim_options List of optimizer-specific arguments
 #' @return List with optimizer information
 #' @keywords internal
-validateAndSetupOptimizer = function(optimizer, ...) {
+validateAndSetupOptimizer = function(optimizer, optim_options = list()) {
 
   if (is.character(optimizer)) {
     if (optimizer == "optim") {
       return(list(
         name = "optim",
         type = "builtin",
-        extra_args = list(...)
+        extra_args = optim_options
       ))
     } else if (optimizer == "deoptim") {
       # Check if DEoptim is available
@@ -264,7 +282,7 @@ validateAndSetupOptimizer = function(optimizer, ...) {
       return(list(
         name = "deoptim",
         type = "builtin",
-        extra_args = list(...)
+        extra_args = optim_options
       ))
     } else {
       stop(sprintf("Unknown optimizer: '%s'. Use 'optim', 'deoptim', or provide a custom function.", optimizer))
@@ -283,7 +301,7 @@ validateAndSetupOptimizer = function(optimizer, ...) {
       name = "custom",
       type = "function",
       func = optimizer,
-      extra_args = list(...)
+      extra_args = optim_options
     ))
   } else {
     stop("optimizer must be a character string ('optim', 'deoptim') or a function")
@@ -293,6 +311,84 @@ validateAndSetupOptimizer = function(optimizer, ...) {
 # Utility function for null coalescing
 `%||%` = function(x, y) if (is.null(x)) y else x
 
+#' Optimize Grid Direction
+#'
+#' Helper function to optimize along a specific direction from the optimal parameter.
+#' Handles the common optimization logic for both left and right sides.
+#'
+#' @param grid_indices Vector of grid indices to optimize (e.g., optimal_index:n_grid for right side)
+#' @param param_index Index of parameter to profile (1-based index)
+#' @param grid_values Numeric vector of grid parameter values to evaluate
+#' @param warm_start_params Numeric vector of initial warm start parameter values
+#' @param negLogLikelihood Function that takes parameter vector and returns scalar cost
+#' @param bounds List with elements 'lower' and 'upper' containing parameter bounds
+#' @param optimizer_info List containing optimizer configuration from validateAndSetupOptimizer
+#' @param profile_costs Numeric vector to store profile costs (modified in place)
+#' @param optimizer_exit_flags Character vector to store optimizer exit flags (modified in place)
+#' @param optimal_params_matrix Matrix to store optimal parameters for each grid point (modified in place)
+#' @param optimization_success Logical vector to track optimization success (modified in place)
+#' @param likelihood_args List of arguments to pass to negLogLikelihood function
+#' @return List with updated arrays: profile_costs, optimizer_exit_flags, optimal_params_matrix, optimization_success, and success_count
+#' @keywords internal
+optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_start_params,
+                                 negLogLikelihood, bounds, optimizer_info, likelihood_args,
+                                 profile_costs, optimizer_exit_flags, optimal_params_matrix,
+                                 optimization_success) {
+
+  current_warm_start = warm_start_params
+  success_count = 0
+
+  for (j in grid_indices) {
+    if (j < 1 || j > length(grid_values)){
+      stop("Error in optimizeGridDirection: grid index out of bounds")
+    }
+
+    tryCatch({
+      result = optimizeConditional(
+        param_index = param_index,
+        fixed_value = grid_values[j],
+        warm_start_params = current_warm_start,
+        negLogLikelihood = negLogLikelihood,
+        bounds = bounds,
+        optimizer_info = optimizer_info,
+        likelihood_args = likelihood_args
+      )
+
+      profile_costs[j] = result$cost
+      optimizer_exit_flags[j] = result$exit_flag
+      optimal_params_matrix[j, ] = result$optimal_params
+
+      # Track success for exit flags
+      is_success = (result$exit_flag == "success" || result$exit_flag == "direct_evaluation")
+      optimization_success[j] = is_success
+      if (is_success) success_count = success_count + 1
+
+      # Update warm start for next iteration (warm start strategy)
+      if (is_success) {
+        current_warm_start = result$optimal_params
+      }
+      # On failure, keep using previous warm start parameters
+
+    }, error = function(e) {
+      warning(sprintf("Optimization failed for parameter %d at grid point %d: %s",
+                      param_index, j, e$message))
+      profile_costs[j] = NA
+      optimizer_exit_flags[j] = "error"
+      optimization_success[j] = FALSE
+      optimal_params_matrix[j, ] = current_warm_start  # Use previous warm start
+      # Don't update warm start on error
+    })
+  }
+
+  return(list(
+    profile_costs = profile_costs,
+    optimizer_exit_flags = optimizer_exit_flags,
+    optimal_params_matrix = optimal_params_matrix,
+    optimization_success = optimization_success,
+    success_count = success_count
+  ))
+}
+
 #' Compute Profile for Single Parameter
 #'
 #' @param param_index Index of parameter to profile
@@ -301,20 +397,39 @@ validateAndSetupOptimizer = function(optimizer, ...) {
 #' @param bounds Parameter bounds
 #' @param profile_options Profiling options
 #' @param optimizer_info Optimizer configuration
+#' @param likelihood_args List of arguments to pass to negLogLikelihood function
 #' @param verbose Logical for verbose output
 #' @return List with profile data and confidence interval
 #' @keywords internal
 computeParameterProfile = function(param_index, params_current, negLogLikelihood,
-                                   bounds, profile_options, optimizer_info, verbose = FALSE) {
+                                   bounds, profile_options, optimizer_info,
+                                   likelihood_args = list(), verbose = FALSE) {
 
   tryCatch({
     # Create grid for this parameter
-    grid_values = createParameterGrid(
+    grid_result = createParameterGrid(
       param_index = param_index,
       params_current = params_current,
       bounds = bounds,
       profile_options = profile_options
     )
+
+    grid_values = grid_result$grid_values
+
+    # Initialize exit flags structure
+    exit_flags = list(
+      low_success_rate = FALSE,
+      confidence_interval_failed = FALSE,
+      optimal_value_out_of_bounds = FALSE,
+      grid_issue = FALSE,
+      grid_too_narrow = FALSE
+    )
+    if (!is.null(grid_result$optimal_value_out_of_bounds)) {
+      exit_flags$optimal_value_out_of_bounds = grid_result$optimal_value_out_of_bounds
+    }
+    if (!is.null(grid_result$grid_issue)) {
+      exit_flags$grid_issue = grid_result$grid_issue
+    }
 
     n_grid = length(grid_values)
     profile_costs = numeric(n_grid)
@@ -331,84 +446,92 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     # Initialize warm start parameters
     warm_start_params = params_current
 
-    # Evaluate cost at each grid point - Right side (from optimal outward)
-    for (j in optimal_index:n_grid) {
-      tryCatch({
-        result = optimizeConditional(
-          param_index = param_index,
-          fixed_value = grid_values[j],
-          warm_start_params = warm_start_params,
-          negLogLikelihood = negLogLikelihood,
-          bounds = bounds,
-          optimizer_info = optimizer_info
-        )
+    # Initialize success tracking
+    optimization_success = logical(n_grid)
+    success_count = 0
 
-        profile_costs[j] = result$cost
-        optimizer_exit_flags[j] = result$exit_flag
-        optimal_params_matrix[j, ] = result$optimal_params
+    # Optimize right side (from optimal outward)
+    right_result = optimizeGridDirection(
+      grid_indices = optimal_index:n_grid,
+      param_index = param_index,
+      grid_values = grid_values,
+      warm_start_params = params_current,
+      negLogLikelihood = negLogLikelihood,
+      bounds = bounds,
+      optimizer_info = optimizer_info,
+      likelihood_args = likelihood_args,
+      profile_costs = profile_costs,
+      optimizer_exit_flags = optimizer_exit_flags,
+      optimal_params_matrix = optimal_params_matrix,
+      optimization_success = optimization_success
+    )
 
-        # Update warm start for next iteration (warm start strategy)
-        if (result$exit_flag == "success" || result$exit_flag == "direct_evaluation") {
-          warm_start_params = result$optimal_params
-        }
-        # On failure, keep using previous warm start parameters
+    # Update arrays with right side results
+    profile_costs = right_result$profile_costs
+    optimizer_exit_flags = right_result$optimizer_exit_flags
+    optimal_params_matrix = right_result$optimal_params_matrix
+    optimization_success = right_result$optimization_success
+    success_count = success_count + right_result$success_count
 
-      }, error = function(e) {
-        warning(sprintf("Optimization failed for parameter %d at grid point %d: %s",
-                       param_index, j, e$message))
-        profile_costs[j] = NA
-        optimizer_exit_flags[j] = "error"
-        optimal_params_matrix[j, ] = warm_start_params  # Use previous warm start
-        # Don't update warm start on error
-      })
+    # Optimize left side (from optimal outward) - reset warm start
+    left_result = optimizeGridDirection(
+      grid_indices = (optimal_index-1):1,
+      param_index = param_index,
+      grid_values = grid_values,
+      warm_start_params = params_current,  # Reset to original optimal params
+      negLogLikelihood = negLogLikelihood,
+      bounds = bounds,
+      optimizer_info = optimizer_info,
+      likelihood_args = likelihood_args,
+      profile_costs = profile_costs,
+      optimizer_exit_flags = optimizer_exit_flags,
+      optimal_params_matrix = optimal_params_matrix,
+      optimization_success = optimization_success
+    )
+
+    # Update arrays with left side results
+    profile_costs = left_result$profile_costs
+    optimizer_exit_flags = left_result$optimizer_exit_flags
+    optimal_params_matrix = left_result$optimal_params_matrix
+    optimization_success = left_result$optimization_success
+    success_count = success_count + left_result$success_count
+
+    # Calculate success rate and set exit flags
+    success_rate = success_count / n_grid
+    if (success_rate < 0.5) {
+      exit_flags$low_success_rate = TRUE
     }
+    # Check if corresponding cost is below threshold. If not set current params at this index
+    # to the minimum observed cost with a warning.
+    min_cost_index = which.min(profile_costs)
+    min_observed_cost = profile_costs[min_cost_index]
+    optimal_grid_cost = profile_costs[optimal_index]
 
-    # Reset warm start for left side optimization
-    warm_start_params = params_current
+    # If the cost at optimal parameter position is significantly higher than minimum found
+    ll_ratio_optimal = 2 * (optimal_grid_cost - min_observed_cost)
+    ll_threshold = profile_options$ll_ratio_threshold
+    if (!is.na(optimal_grid_cost) && ll_ratio_optimal >= ll_threshold) {
+      warning(sprintf("Likelihood ratio test at provided optimal parameter (%.4f) exceeds threshold (%.4f). Using best parameters found during profiling.",
+                      ll_ratio_optimal, ll_threshold), call. = FALSE)
 
-    # Evaluate cost at each grid point - Left side (from optimal outward)
-    for (j in (optimal_index-1):1) {
-      if (j < 1) break  # Safety check
-
-      tryCatch({
-        result = optimizeConditional(
-          param_index = param_index,
-          fixed_value = grid_values[j],
-          warm_start_params = warm_start_params,
-          negLogLikelihood = negLogLikelihood,
-          bounds = bounds,
-          optimizer_info = optimizer_info
-        )
-
-        profile_costs[j] = result$cost
-        optimizer_exit_flags[j] = result$exit_flag
-        optimal_params_matrix[j, ] = result$optimal_params
-
-        # Update warm start for next iteration (warm start strategy)
-        if (result$exit_flag == "success" || result$exit_flag == "direct_evaluation") {
-          warm_start_params = result$optimal_params
-        }
-        # On failure, keep using previous warm start parameters
-
-      }, error = function(e) {
-        warning(sprintf("Optimization failed for parameter %d at grid point %d: %s",
-                       param_index, j, e$message))
-        profile_costs[j] = NA
-        optimizer_exit_flags[j] = "error"
-        optimal_params_matrix[j, ] = warm_start_params  # Use previous warm start
-        # Don't update warm start on error
-      })
+      # Update the profile data to use the best parameters found
+      optimal_param_value = grid_values[min_cost_index]
+    } else {
+      optimal_param_value = params_current[param_index]
     }
 
     # Create profile data structure
     profile_data = list(
       param_index = param_index,
-      optimal_param_value = params_current[param_index],
+      optimal_param_value = optimal_param_value,
       grid_values = grid_values,
       profile_costs = profile_costs,
       optimizer_exit_flags = optimizer_exit_flags,
       optimal_params_matrix = optimal_params_matrix,
-      optimal_cost = min(profile_costs, na.rm = TRUE),
+      optimization_success = optimization_success,
+      success_rate = success_rate,
+      exit_flags = exit_flags,
+      optimal_cost = min_observed_cost,
       failed = FALSE
     )
 
@@ -417,6 +540,11 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
       profile_data = profile_data,
       profile_options = profile_options
     )
+
+    # Update exit flags based on CI extraction
+    if (any(is.na(confidence_interval))) {
+      profile_data$exit_flags$confidence_interval_failed = TRUE
+    }
 
     return(list(
       profile = profile_data,
@@ -450,13 +578,16 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
 #' @param params_current Current parameter values
 #' @param bounds Parameter bounds
 #' @param profile_options Profiling options
-#' @return Numeric vector of grid values
+#' @return List with grid_values and optional flags
 #' @keywords internal
 createParameterGrid = function(param_index, params_current, bounds, profile_options) {
 
   current_value = params_current[param_index]
   lower_bound = bounds$lower[param_index]
   upper_bound = bounds$upper[param_index]
+
+  # Check if optimal value is within bounds
+  optimal_value_out_of_bounds = current_value < lower_bound || current_value > upper_bound
 
   # Determine grid range
   param_range = upper_bound - lower_bound
@@ -474,12 +605,21 @@ createParameterGrid = function(param_index, params_current, bounds, profile_opti
   }
 
   if (profile_options$grid_method == "uniform") {
-    return(createUniformGrid(grid_lower, grid_upper, current_value, profile_options$grid_points))
+    grid_values = createUniformGrid(grid_lower, grid_upper, current_value, profile_options$grid_points)
   } else if (profile_options$grid_method == "adaptive") {
-    return(createAdaptiveGrid(grid_lower, grid_upper, current_value, profile_options$grid_points))
+    grid_values = createAdaptiveGrid(grid_lower, grid_upper, current_value, profile_options$grid_points)
   } else {
     stop(sprintf("Unknown grid method: %s", profile_options$grid_method))
   }
+
+  # Check for grid issues
+  grid_issue = length(grid_values) < 3
+
+  list(
+    grid_values = grid_values,
+    optimal_value_out_of_bounds = optimal_value_out_of_bounds,
+    grid_issue = grid_issue
+  )
 }
 
 #' Create Uniform Grid
@@ -490,7 +630,7 @@ createParameterGrid = function(param_index, params_current, bounds, profile_opti
 #' @return Numeric vector of uniformly spaced grid values
 #' @keywords internal
 createUniformGrid = function(grid_lower, grid_upper, current_value, n_points) {
-  res_grid = c(seq(grid_lower, current_value, length.out = floor(n_points/2)) + 1,
+  res_grid = c(seq(grid_lower, current_value, length.out = floor(n_points/2) + 1),
                seq(current_value, grid_upper, length.out = floor(n_points/2) + 1))
 
   unique(res_grid)
@@ -524,15 +664,16 @@ createAdaptiveGrid = function(grid_lower, grid_upper, center_value, n_points) {
 #' @param negLogLikelihood Cost function to optimize
 #' @param bounds Parameter bounds
 #' @param optimizer_info Optimizer configuration
+#' @param likelihood_args List of arguments to pass to negLogLikelihood function
 #' @return List with optimized cost, exit flag, and optimal parameters
 #' @keywords internal
 optimizeConditional = function(param_index, fixed_value, warm_start_params,
-                               negLogLikelihood, bounds, optimizer_info) {
+                               negLogLikelihood, bounds, optimizer_info, likelihood_args = list()) {
 
   # Create conditional cost function
   conditional_cost = function(free_params, ...) {
     evaluateConditionalCost(free_params, param_index, fixed_value,
-                            warm_start_params, negLogLikelihood, ...)
+                            warm_start_params, negLogLikelihood, likelihood_args)
   }
 
   # Set up free parameters and bounds
@@ -544,16 +685,16 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
   # Handle single parameter case
   if (length(free_indices) == 0) {
     browser()
-    cost = do.call(negLogLikelihood, c(list(warm_start_params), optimizer_info$extra_args))
-    return(list(cost = cost, exit_flag = "direct_evaluation", optimal_params = warm_start_params))
+    # Construct full parameter vector with fixed parameter
+    full_params = warm_start_params
+    full_params[param_index] = fixed_value
+    cost = do.call(negLogLikelihood, c(list(full_params), likelihood_args))
+    return(list(cost = cost, exit_flag = "direct_evaluation", optimal_params = full_params))
   }
 
   # Optimize based on optimizer type
   if (optimizer_info$type == "builtin") {
     if (optimizer_info$name == "optim") {
-
-      extra_args = optimizer_info$extra_args
-
       result = do.call(optim, c(
         list(
           par = initial_free_params,
@@ -561,11 +702,11 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
           lower = lower_free,
           upper = upper_free
         ),
-        extra_args
+        optimizer_info$extra_args
       ))
 
       cost = result$value
-      exit_flag = if (result$convergence == 0) "success" else paste("convergence_", result$convergence, sep="")
+      exit_flag = if (result$convergence == 0) "success" else paste0("convergence_", result$convergence)
 
     } else if (optimizer_info$name == "deoptim") {
 
@@ -598,7 +739,7 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
     if (is.list(result)) {
       cost = result$value %||% result$minimum %||% result$cost %||% result$objective
       exit_flag = if (!is.null(result$convergence)) {
-        if (result$convergence == 0) "success" else paste("convergence_", result$convergence, sep="")
+        if (result$convergence == 0) "success" else paste0("convergence_", result$convergence)
       } else {
         "success"
       }
@@ -631,11 +772,11 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
 #' @param fixed_value Value of fixed parameter
 #' @param warm_start_params Template parameter vector
 #' @param negLogLikelihood Original cost function
-#' @param extra_args Additional arguments to pass to cost function
+#' @param likelihood_args List of arguments to pass to negLogLikelihood function
 #' @return Scalar cost value
 #' @keywords internal
 evaluateConditionalCost = function(free_params, param_index, fixed_value,
-                                   warm_start_params, negLogLikelihood, ...) {
+                                   warm_start_params, negLogLikelihood, likelihood_args = list()) {
 
   # Reconstruct full parameter vector
   full_params = warm_start_params
@@ -644,8 +785,8 @@ evaluateConditionalCost = function(free_params, param_index, fixed_value,
   free_indices = setdiff(1:length(warm_start_params), param_index)
   full_params[free_indices] = free_params
 
-  # Call cost function with additional arguments
-  negLogLikelihood(full_params, ...)
+  # Call cost function with likelihood arguments only
+  do.call(negLogLikelihood, c(list(full_params), likelihood_args))
 }
 
 #' Extract Confidence Interval from Profile
@@ -689,8 +830,6 @@ findConfidenceBounds = function(grid_values, profile_costs, threshold_cost, opti
     return(c(NA, NA))
   }
 
-  # browser()
-
   # Sort by grid values
   sorted_indices = order(grid_values)
   sorted_grid = grid_values[sorted_indices]
@@ -698,7 +837,7 @@ findConfidenceBounds = function(grid_values, profile_costs, threshold_cost, opti
 
   n = length(sorted_grid)
 
-  # Convert costs to likelihood ratios (following MATLAB approach)
+  # Convert costs to likelihood ratios
   ll_ratios = 2 * (sorted_costs - min(sorted_costs, na.rm = TRUE))
 
   # Find crossings where likelihood ratio crosses threshold
@@ -780,20 +919,21 @@ findConfidenceBounds = function(grid_values, profile_costs, threshold_cost, opti
 #' @keywords internal
 issueConsolidatedWarnings = function(profiles, n_params) {
 
-  # Count failures and convergence issues
+  # Count failures and other issues
   failed_params = which(sapply(profiles, function(p) isTRUE(p$failed)))
+  low_success_rate_params = c()
+  ci_failed_params = c()
+  bounds_issue_params = c()
+  grid_issue_params = c()
 
-  convergence_issues = list()
+  # Analyze exit flags
   for (i in 1:n_params) {
-    if (!profiles[[i]]$failed) {
-      flags = profiles[[i]]$optimizer_exit_flags
-      non_success = flags[flags != "success" & flags != "direct_evaluation"]
-      if (length(non_success) > 0) {
-        convergence_issues[[length(convergence_issues) + 1]] = list(
-          param = i,
-          issues = unique(non_success)
-        )
-      }
+    if (!profiles[[i]]$failed && !is.null(profiles[[i]]$exit_flags)) {
+      flags = profiles[[i]]$exit_flags
+      if (isTRUE(flags$low_success_rate)) low_success_rate_params = c(low_success_rate_params, i)
+      if (isTRUE(flags$confidence_interval_failed)) ci_failed_params = c(ci_failed_params, i)
+      if (isTRUE(flags$optimal_value_out_of_bounds)) bounds_issue_params = c(bounds_issue_params, i)
+      if (isTRUE(flags$grid_issue)) grid_issue_params = c(grid_issue_params, i)
     }
   }
 
@@ -803,11 +943,24 @@ issueConsolidatedWarnings = function(profiles, n_params) {
                     paste(failed_params, collapse = ", ")), call. = FALSE)
   }
 
-  if (length(convergence_issues) > 0) {
-    for (issue in convergence_issues) {
-      warning(sprintf("Convergence issues for parameter %d: %s",
-                      issue$param, paste(issue$issues, collapse = ", ")), call. = FALSE)
-    }
+  if (length(low_success_rate_params) > 0) {
+    warning(sprintf("Low optimization success rate (<50%%) for parameter(s): %s",
+                    paste(low_success_rate_params, collapse = ", ")), call. = FALSE)
+  }
+
+  if (length(ci_failed_params) > 0) {
+    warning(sprintf("Failed to extract confidence intervals for parameter(s): %s",
+                    paste(ci_failed_params, collapse = ", ")), call. = FALSE)
+  }
+
+  if (length(bounds_issue_params) > 0) {
+    warning(sprintf("Optimal values outside bounds for parameter(s): %s",
+                    paste(bounds_issue_params, collapse = ", ")), call. = FALSE)
+  }
+
+  if (length(grid_issue_params) > 0) {
+    warning(sprintf("Grid coverage issues for parameter(s): %s",
+                    paste(grid_issue_params, collapse = ", ")), call. = FALSE)
   }
 }
 
@@ -832,13 +985,30 @@ validateProfileResults = function(profiles, confidence_intervals, n_params, verb
                 valid_profiles, n_params))
   }
 
-  # Check confidence interval validity
+  # Check confidence interval validity and quality
   invalid_ci = is.na(confidence_intervals[, 1]) | is.na(confidence_intervals[, 2])
 
   if (verbose && any(invalid_ci)) {
     invalid_params = which(invalid_ci)
     cat(sprintf("Warning: Confidence intervals could not be determined for parameter(s): %s\n",
                 paste(invalid_params, collapse = ", ")))
+  }
+
+  # Check for CI quality issues
+  if (verbose) {
+    valid_ci = !invalid_ci
+    if (sum(valid_ci) > 0) {
+      ci_widths = confidence_intervals[valid_ci, 2] - confidence_intervals[valid_ci, 1]
+      extremely_wide = sum(ci_widths > 1000, na.rm = TRUE)
+      extremely_narrow = sum(ci_widths < 1e-10, na.rm = TRUE)
+
+      if (extremely_wide > 0) {
+        cat(sprintf("Warning: %d parameters have very wide confidence intervals (>1000).\n", extremely_wide))
+      }
+      if (extremely_narrow > 0) {
+        cat(sprintf("Warning: %d parameters have very narrow confidence intervals (<1e-10).\n", extremely_narrow))
+      }
+    }
   }
 }
 
