@@ -3,15 +3,16 @@
 mlogf = function(x, gamma){
   m1 = m2 = rep(0, length(x))
   m1[1] = 1
-  m2[1] = -1
+  m2[1] = 0
   - log(exp(- gamma * (sum((x-m1)^2))) + exp(- gamma * (sum((x-m2)^2))))
 }
 #Problem parameters
 gamma = 8   #power law for the Gaussian mixture
-d = 5
+d = 1
 
 # Set up the problem
 true_params = c(1, rep(0, d-1))
+set.seed(23)
 optimized_params = true_params + rnorm(length(true_params), sd = 0.3)
 names(true_params) = names(optimized_params) = paste0("param_", 1:d)
 bounds = list(lower = rep(-2, d), upper = rep(2, d))

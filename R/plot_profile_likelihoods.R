@@ -188,7 +188,7 @@ addProfileLegend = function(general_options, par_options, true_values) {
   legend_lwd = c(general_options$lwd)
 
   if (general_options$show_optimal) {
-    legend_items = c(legend_items, "Optimal")
+    legend_items = c(legend_items, "Optimized")
     legend_colors = c(legend_colors, "green")
     legend_lty = c(legend_lty, 2)
     legend_lwd = c(legend_lwd, 2)
@@ -219,14 +219,14 @@ addProfileLegend = function(general_options, par_options, true_values) {
   # Similar to plotDistrib approach
   old_par_legend = par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
   on.exit(par(old_par_legend))
-  
+
   # Create invisible plot that covers the entire figure
   plot(0, 0, type = 'n', bty = 'n', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
-  
+
   # Add legend in the right side
-  legend("right", 
+  legend("right",
          legend = legend_items,
-         col = legend_colors, 
+         col = legend_colors,
          lty = legend_lty,
          lwd = legend_lwd,
          cex = par_options$cex * 0.9,
@@ -265,6 +265,8 @@ plotSingleProfile = function(profile_data, param_name, param_index, confidence_i
   grid_values = profile_data$grid_values
   profile_costs = profile_data$profile_costs
   optimal_cost = profile_data$optimal_cost
+  optimized_value = profile_data$optimal_param_value
+
 
   # Check for valid data
   if (length(grid_values) < 2) {
@@ -328,22 +330,19 @@ plotSingleProfile = function(profile_data, param_name, param_index, confidence_i
   }
 
   # Create base plot
-  plot(sorted_grid, y_values, type = "l", lwd = general_options$lwd, col = "blue",
+  plot(NULL,
        xlim = xlim, ylim = ylim, xlab = "", ylab = "",
        yaxt = yaxt_setting, main = param_name, cex.main = par_options$cex)
 
   # Add grid
   grid(col = "lightgray", lty = 2)
 
-  # Re-plot the main curve on top of grid
+  # Plot profile likelihood curve
   lines(sorted_grid, y_values, lwd = general_options$lwd, col = "blue")
 
   # Add optimal parameter value
   if (general_options$show_optimal) {
-    # Find optimal parameter value (where cost is minimal)
-    optimal_idx = which.min(sorted_costs)
-    optimal_param = sorted_grid[optimal_idx]
-    abline(v = optimal_param, col = "green", lwd = 2, lty = 2)
+    abline(v = optimized_value, col = "green", lwd = 2, lty = 2)
   }
 
   # Add true value if provided

@@ -319,32 +319,95 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     n_grid = length(grid_values)
     profile_costs = numeric(n_grid)
     optimizer_exit_flags = character(n_grid)
+    optimal_params_matrix = matrix(NA, nrow = n_grid, ncol = length(params_current))
 
     if (verbose) {
       cat(sprintf("  Evaluating %d grid points...\n", n_grid))
     }
 
-    # Evaluate cost at each grid point
-    for (j in 1:n_grid) {
-      result = optimizeConditional(
-        param_index = param_index,
-        fixed_value = grid_values[j],
-        params_current = params_current,
-        negLogLikelihood = negLogLikelihood,
-        bounds = bounds,
-        optimizer_info = optimizer_info
-      )
+    # Find the index of the optimal parameter value in the grid
+    optimal_index = which.min(abs(grid_values - params_current[param_index]))
 
-      profile_costs[j] = result$cost
-      optimizer_exit_flags[j] = result$exit_flag
+    # Initialize warm start parameters
+    warm_start_params = params_current
+
+    # Evaluate cost at each grid point - Right side (from optimal outward)
+    for (j in optimal_index:n_grid) {
+      tryCatch({
+        result = optimizeConditional(
+          param_index = param_index,
+          fixed_value = grid_values[j],
+          warm_start_params = warm_start_params,
+          negLogLikelihood = negLogLikelihood,
+          bounds = bounds,
+          optimizer_info = optimizer_info
+        )
+
+        profile_costs[j] = result$cost
+        optimizer_exit_flags[j] = result$exit_flag
+        optimal_params_matrix[j, ] = result$optimal_params
+
+        # Update warm start for next iteration (warm start strategy)
+        if (result$exit_flag == "success" || result$exit_flag == "direct_evaluation") {
+          warm_start_params = result$optimal_params
+        }
+        # On failure, keep using previous warm start parameters
+
+      }, error = function(e) {
+        warning(sprintf("Optimization failed for parameter %d at grid point %d: %s",
+                       param_index, j, e$message))
+        profile_costs[j] = NA
+        optimizer_exit_flags[j] = "error"
+        optimal_params_matrix[j, ] = warm_start_params  # Use previous warm start
+        # Don't update warm start on error
+      })
+    }
+
+    # Reset warm start for left side optimization
+    warm_start_params = params_current
+
+    # Evaluate cost at each grid point - Left side (from optimal outward)
+    for (j in (optimal_index-1):1) {
+      if (j < 1) break  # Safety check
+
+      tryCatch({
+        result = optimizeConditional(
+          param_index = param_index,
+          fixed_value = grid_values[j],
+          warm_start_params = warm_start_params,
+          negLogLikelihood = negLogLikelihood,
+          bounds = bounds,
+          optimizer_info = optimizer_info
+        )
+
+        profile_costs[j] = result$cost
+        optimizer_exit_flags[j] = result$exit_flag
+        optimal_params_matrix[j, ] = result$optimal_params
+
+        # Update warm start for next iteration (warm start strategy)
+        if (result$exit_flag == "success" || result$exit_flag == "direct_evaluation") {
+          warm_start_params = result$optimal_params
+        }
+        # On failure, keep using previous warm start parameters
+
+      }, error = function(e) {
+        warning(sprintf("Optimization failed for parameter %d at grid point %d: %s",
+                       param_index, j, e$message))
+        profile_costs[j] = NA
+        optimizer_exit_flags[j] = "error"
+        optimal_params_matrix[j, ] = warm_start_params  # Use previous warm start
+        # Don't update warm start on error
+      })
     }
 
     # Create profile data structure
     profile_data = list(
       param_index = param_index,
+      optimal_param_value = params_current[param_index],
       grid_values = grid_values,
       profile_costs = profile_costs,
       optimizer_exit_flags = optimizer_exit_flags,
+      optimal_params_matrix = optimal_params_matrix,
       optimal_cost = min(profile_costs, na.rm = TRUE),
       failed = FALSE
     )
@@ -352,8 +415,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     # Extract confidence interval
     confidence_interval = extractConfidenceInterval(
       profile_data = profile_data,
-      profile_options = profile_options,
-      optimal_param_value = params_current[param_index]
+      profile_options = profile_options
     )
 
     return(list(
@@ -366,6 +428,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
 
     profile_data = list(
       param_index = param_index,
+      optimal_param_value = params_current[param_index],
       grid_values = numeric(0),
       profile_costs = numeric(0),
       optimizer_exit_flags = character(0),
@@ -411,7 +474,7 @@ createParameterGrid = function(param_index, params_current, bounds, profile_opti
   }
 
   if (profile_options$grid_method == "uniform") {
-    return(createUniformGrid(grid_lower, grid_upper, profile_options$grid_points))
+    return(createUniformGrid(grid_lower, grid_upper, current_value, profile_options$grid_points))
   } else if (profile_options$grid_method == "adaptive") {
     return(createAdaptiveGrid(grid_lower, grid_upper, current_value, profile_options$grid_points))
   } else {
@@ -426,8 +489,11 @@ createParameterGrid = function(param_index, params_current, bounds, profile_opti
 #' @param n_points Number of grid points
 #' @return Numeric vector of uniformly spaced grid values
 #' @keywords internal
-createUniformGrid = function(grid_lower, grid_upper, n_points) {
-  return(seq(grid_lower, grid_upper, length.out = n_points))
+createUniformGrid = function(grid_lower, grid_upper, current_value, n_points) {
+  res_grid = c(seq(grid_lower, current_value, length.out = floor(n_points/2)) + 1,
+               seq(current_value, grid_upper, length.out = floor(n_points/2) + 1))
+
+  unique(res_grid)
 }
 
 #' Create Adaptive Grid
@@ -441,51 +507,45 @@ createUniformGrid = function(grid_lower, grid_upper, n_points) {
 createAdaptiveGrid = function(grid_lower, grid_upper, center_value, n_points) {
 
   # Create quadratic spacing for denser sampling near center
-  t = seq(-1, 1, length.out = n_points)
+  n_half = floor(n_points/2) + 1
+  t_onesided = seq(0, 1, length.out = n_half)^2
+  left_side = center_value - t_onesided*(center_value - grid_lower)
+  right_side = center_value + t_onesided*(grid_upper - center_value)
 
-  # Quadratic transformation: denser near center (t=0)
-  spacing_factor = 0.7  # Controls density near center
-  adjusted_t = sign(t) * abs(t)^spacing_factor
-
-  # Map to parameter range
-  grid_values = grid_lower + (adjusted_t + 1) / 2 * (grid_upper - grid_lower)
-
-  # Ensure center value is included
-  center_idx = which.min(abs(grid_values - center_value))
-  grid_values[center_idx] = center_value
-
-  return(sort(grid_values))
+  res_grid = c(left_side, right_side)
+  unique(sort(res_grid))
 }
 
 #' Optimize with Fixed Parameter
 #'
 #' @param param_index Index of parameter to fix
 #' @param fixed_value Value to fix parameter at
-#' @param params_current Current parameter values
+#' @param warm_start_params Warm start parameter values for optimization
 #' @param negLogLikelihood Cost function to optimize
 #' @param bounds Parameter bounds
 #' @param optimizer_info Optimizer configuration
-#' @return List with optimized cost and exit flag
+#' @return List with optimized cost, exit flag, and optimal parameters
 #' @keywords internal
-optimizeConditional = function(param_index, fixed_value, params_current,
+optimizeConditional = function(param_index, fixed_value, warm_start_params,
                                negLogLikelihood, bounds, optimizer_info) {
 
   # Create conditional cost function
   conditional_cost = function(free_params, ...) {
     evaluateConditionalCost(free_params, param_index, fixed_value,
-                            params_current, negLogLikelihood, ...)
+                            warm_start_params, negLogLikelihood, ...)
   }
 
   # Set up free parameters and bounds
-  free_indices = setdiff(1:length(params_current), param_index)
-  initial_free_params = params_current[free_indices]
+  free_indices = setdiff(1:length(warm_start_params), param_index)
+  initial_free_params = warm_start_params[free_indices]
   lower_free = bounds$lower[free_indices]
   upper_free = bounds$upper[free_indices]
 
   # Handle single parameter case
   if (length(free_indices) == 0) {
-    cost = do.call(negLogLikelihood, c(list(params_current), optimizer_info$extra_args))
-    return(list(cost = cost, exit_flag = "direct_evaluation"))
+    browser()
+    cost = do.call(negLogLikelihood, c(list(warm_start_params), optimizer_info$extra_args))
+    return(list(cost = cost, exit_flag = "direct_evaluation", optimal_params = warm_start_params))
   }
 
   # Optimize based on optimizer type
@@ -548,7 +608,20 @@ optimizeConditional = function(param_index, fixed_value, params_current,
     }
   }
 
-  return(list(cost = cost, exit_flag = exit_flag))
+  # Reconstruct full parameter vector with optimized free parameters
+  optimal_params = warm_start_params
+  if (optimizer_info$name == "optim") {
+    optimal_params[free_indices] = result$par
+  } else if (optimizer_info$name == "deoptim") {
+    optimal_params[free_indices] = result$optim$bestmem
+  } else if (optimizer_info$type == "function") {
+    if (is.list(result)) {
+      optimal_params[free_indices] = result$par %||% result$minimum %||% result$solution %||% result$x
+    }
+  }
+  optimal_params[param_index] = fixed_value  # Ensure fixed parameter stays fixed
+
+  return(list(cost = cost, exit_flag = exit_flag, optimal_params = optimal_params))
 }
 
 #' Evaluate Conditional Cost Function
@@ -556,19 +629,19 @@ optimizeConditional = function(param_index, fixed_value, params_current,
 #' @param free_params Free parameter values
 #' @param param_index Index of fixed parameter
 #' @param fixed_value Value of fixed parameter
-#' @param params_current Template parameter vector
+#' @param warm_start_params Template parameter vector
 #' @param negLogLikelihood Original cost function
 #' @param extra_args Additional arguments to pass to cost function
 #' @return Scalar cost value
 #' @keywords internal
 evaluateConditionalCost = function(free_params, param_index, fixed_value,
-                                   params_current, negLogLikelihood, ...) {
+                                   warm_start_params, negLogLikelihood, ...) {
 
   # Reconstruct full parameter vector
-  full_params = params_current
+  full_params = warm_start_params
   full_params[param_index] = fixed_value
 
-  free_indices = setdiff(1:length(params_current), param_index)
+  free_indices = setdiff(1:length(warm_start_params), param_index)
   full_params[free_indices] = free_params
 
   # Call cost function with additional arguments
@@ -582,7 +655,7 @@ evaluateConditionalCost = function(free_params, param_index, fixed_value,
 #' @param optimal_param_value Optimal parameter value from params_current
 #' @return Numeric vector [lower, upper] confidence bounds
 #' @keywords internal
-extractConfidenceInterval = function(profile_data, profile_options, optimal_param_value) {
+extractConfidenceInterval = function(profile_data, profile_options) {
 
   if (profile_data$failed || length(profile_data$profile_costs) == 0) {
     return(c(NA, NA))
@@ -596,7 +669,7 @@ extractConfidenceInterval = function(profile_data, profile_options, optimal_para
     grid_values = profile_data$grid_values,
     profile_costs = profile_data$profile_costs,
     threshold_cost = threshold_cost,
-    optimal_param_value = optimal_param_value
+    optimal_param_value = profile_data$optimal_param_value
   )
 
   return(confidence_bounds)
