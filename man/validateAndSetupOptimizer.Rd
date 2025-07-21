@@ -4,12 +4,14 @@
 \alias{validateAndSetupOptimizer}
 \title{Validate and Setup Optimizer}
 \usage{
-validateAndSetupOptimizer(optimizer, optim_options = list())
+validateAndSetupOptimizer(optimizer, optim_options = list(), bounds = NULL)
 }
 \arguments{
 \item{optimizer}{Character string or function specifying optimizer}
 
 \item{optim_options}{List of optimizer-specific arguments}
+
+\item{bounds}{Optional list with elements 'lower' and 'upper' containing parameter bounds}
 }
 \value{
 List with optimizer information
