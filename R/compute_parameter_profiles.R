@@ -143,15 +143,15 @@ computeLikelihoodProfiles = function(params_current,
   # Set default profile options
   default_options = list(
     grid_method = "uniform",
-    grid_points = 25,
+    grid_points = 100,
     max_grid_range_multiplier = 2.0,
     ll_ratio_threshold = 3.84  # 95% CI for chi-square with 1 df
   )
 
-  profile_options = modifyList(default_options, profile_options)
+  profile_options = utils::modifyList(default_options, profile_options)
 
   # Validate optimizer
-  optimizer_info = validateAndSetupOptimizer(optimizer, optim_options)
+  optimizer_info = validateAndSetupOptimizer(optimizer, optim_options, bounds)
 
   # Capture likelihood function arguments
   likelihood_args = list(...)
@@ -263,12 +263,43 @@ computeLikelihoodProfiles = function(params_current,
 #'
 #' @param optimizer Character string or function specifying optimizer
 #' @param optim_options List of optimizer-specific arguments
+#' @param bounds Optional list with elements 'lower' and 'upper' containing parameter bounds
 #' @return List with optimizer information
 #' @keywords internal
-validateAndSetupOptimizer = function(optimizer, optim_options = list()) {
+validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds = NULL) {
+
+  # Validate bounds if provided
+  if (!is.null(bounds)) {
+    if (!is.list(bounds) || !all(c("lower", "upper") %in% names(bounds))) {
+      stop("bounds must be a list with 'lower' and 'upper' elements")
+    }
+    
+    if (!is.numeric(bounds$lower) || !is.numeric(bounds$upper)) {
+      stop("bounds$lower and bounds$upper must be numeric vectors")
+    }
+    
+    if (length(bounds$lower) != length(bounds$upper)) {
+      stop("bounds$lower and bounds$upper must have the same length")
+    }
+    
+    if (any(bounds$lower >= bounds$upper)) {
+      stop("bounds$lower must be less than bounds$upper for all elements")
+    }
+  }
 
   if (is.character(optimizer)) {
     if (optimizer == "optim") {
+      # Handle bounds for optim
+      if (!is.null(bounds)) {
+        # Check if method is already specified
+        current_method = optim_options$method
+        if (!is.null(current_method) && current_method != "L-BFGS-B") {
+          warning(sprintf("Method '%s' specified for optim with bounds. Changing to 'L-BFGS-B' to handle bounds properly.", current_method), call. = FALSE)
+        }
+        # Set method to L-BFGS-B for bound-constrained optimization
+        optim_options$method = "L-BFGS-B"
+      }
+      
       return(list(
         name = "optim",
         type = "builtin",
@@ -694,7 +725,7 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
   # Optimize based on optimizer type
   if (optimizer_info$type == "builtin") {
     if (optimizer_info$name == "optim") {
-      result = do.call(optim, c(
+      result = do.call(stats::optim, c(
         list(
           par = initial_free_params,
           fn = conditional_cost,

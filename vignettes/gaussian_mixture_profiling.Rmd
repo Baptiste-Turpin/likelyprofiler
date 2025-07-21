@@ -1,0 +1,111 @@
+---
+title: "Profile Likelihood for a Gaussian Mixture Model"
+author: "likelyprofiler Package"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Profile Likelihood for a Gaussian Mixture Model}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction to Profile Likelihood
+
+Profile likelihood is a fundamental method for uncertainty quantification in statistical inference. Given a parameter vector $\theta = (\theta_1, \theta_2, \ldots, \theta_p)$ and a likelihood function $L(\theta)$, the profile likelihood for parameter $\theta_i$ is obtained by:
+
+1. **Fixing** the parameter of interest $\theta_i$ at a specific value
+2. **Optimizing** the likelihood over all other parameters $\theta_{-i} = \{\theta_1, \ldots, \theta_{i-1}, \theta_{i+1}, \ldots, \theta_p\}$
+3. **Recording** the maximized likelihood value as a function of $\theta_i$
+
+Mathematically, the profile likelihood for parameter $\theta_i$ is:
+
+$$L_p(\theta_i) = \max_{\theta_{-i}} L(\theta_i, \theta_{-i})$$
+
+Confidence intervals are then constructed using the likelihood ratio test statistic:
+
+$$\text{LR}(\theta_i) = 2[\log L(\hat{\theta}) - \log L_p(\theta_i)]$$
+
+where $\hat{\theta}$ is the maximum likelihood estimate. Under regularity conditions, $\text{LR}(\theta_i)$ follows a $\chi^2_1$ distribution, so 95% confidence intervals correspond to the region where $\text{LR}(\theta_i) \leq 3.84$.
+
+## Test Case: Gaussian Mixture Model
+
+This vignette demonstrates profile likelihood computation for a simple optimization problem: a **two-component Gaussian mixture model** with fixed, well-separated means. The model is defined by the negative log-likelihood:
+
+$$-\log L(x; \gamma) = -\log\left[\exp\left(-\gamma \|x - m_1\|^2\right) + \exp\left(-\gamma \|x - m_2\|^2\right)\right]$$
+
+where:
+
+- $x \in \mathbb{R}^d$ is the parameter vector of interest (in our case, $d = 5$)
+- $\gamma > 0$ is the concentration parameter (higher values create sharper peaks)
+- $m_1 = (1, 0, 0, 0, 0)^T$ and $m_2 = (0, 0, 0, 0, 0)^T$ are the fixed mixture centers
+
+We define this negative log-likelihood function in R as follows:
+```{r}
+# Define the Gaussian mixture negative log-likelihood
+mlogf = function(x, gamma){
+  m1 = m2 = rep(0, length(x))
+  m1[1] = 1
+  m2[1] = 0
+  - log(exp(- gamma * (sum((x-m1)^2))) + exp(- gamma * (sum((x-m2)^2))))
+}
+
+# Problem parameters
+gamma = 8   # concentration parameter
+d = 5       # dimensionality
+```
+
+For this example, let us define the true parameters as known, and some dummy optimized parameters as if we obtained them from an optimization routine.
+
+```{r}
+true_params = c(1, rep(0, d-1))
+# Define optimized parameters, slightly away from the true values
+set.seed(23)
+optimized_params = true_params + rnorm(length(true_params), sd = 0.05)
+names(true_params) = names(optimized_params) = paste0("param_", 1:d)
+```
+
+Now we can perform profile likelihood computation using the `computeLikelihoodProfiles` function.
+
+```{r}
+library(likelyprofiler)
+
+# Bounds for the parameters
+bounds = list(lower = rep(-2, d), upper = rep(2, d))
+
+# Compute profile likelihood
+result = computeLikelihoodProfiles(
+  params_current = optimized_params,
+  negLogLikelihood = mlogf,
+  bounds = bounds,
+  gamma = gamma
+)
+
+```
+
+Print a summary of the results and confidence intervals:
+```{r}
+# View results
+print(result$summary)
+print(result$confidence_intervals)
+```
+
+Finally, we can visualize the profile likelihood using the `plotLikelihoodProfiles` function. This will show how the likelihood varies with each parameter, along with confidence intervals. This can help identify issues like parameter identifiability, or even issues with the optimization routine itself.
+
+```{r}
+# Plot the profile likelihood
+plotLikelihoodProfiles(result,
+                       true_values = true_params
+)
+```

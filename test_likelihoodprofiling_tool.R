@@ -9,7 +9,7 @@ mlogf = function(x, gamma){
 }
 #Problem parameters
 gamma = 8   #power law for the Gaussian mixture
-d = 1
+d = 5
 
 # Set up the problem
 true_params = c(1, rep(0, d-1))

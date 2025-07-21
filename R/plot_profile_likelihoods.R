@@ -107,8 +107,8 @@ plotLikelihoodProfiles = function(profile_result, options = list(), plot_options
   )
 
   # Merge with user options
-  general_options = modifyList(default_options, options)
-  par_options = modifyList(default_plot_options, plot_options)
+  general_options = utils::modifyList(default_options, options)
+  par_options = utils::modifyList(default_plot_options, plot_options)
 
   # Get data
   profiles = profile_result$profiles
@@ -136,8 +136,8 @@ plotLikelihoodProfiles = function(profile_result, options = list(), plot_options
 
   # Set up plotting area with outer margins
   par_args = c(list(mfrow = c(n_rows, n_cols)), par_options)
-  old_par = do.call(par, par_args)
-  on.exit(par(old_par))
+  old_par = do.call(graphics::par, par_args)
+  on.exit(graphics::par(old_par))
 
   # Plot each parameter
   for (i in 1:n_params) {
@@ -162,8 +162,8 @@ plotLikelihoodProfiles = function(profile_result, options = list(), plot_options
 
   # Add common labels
   y_label = if (general_options$log_scale) "Log-Likelihood Difference" else "Likelihood Ratio"
-  mtext("Parameter Value", side = 1, line = general_options$line_x, outer = TRUE, adj = 0.5, cex = general_options$cex.lab)
-  mtext(y_label, side = 2, line = general_options$line_y, outer = TRUE, adj = 0.5, cex = general_options$cex.lab)
+  graphics::mtext("Parameter Value", side = 1, line = general_options$line_x, outer = TRUE, adj = 0.5, cex = general_options$cex.lab)
+  graphics::mtext(y_label, side = 2, line = general_options$line_y, outer = TRUE, adj = 0.5, cex = general_options$cex.lab)
 
   # Add common legend on the right side
   addProfileLegend(general_options, par_options, true_values)
@@ -217,14 +217,14 @@ addProfileLegend = function(general_options, par_options, true_values) {
 
   # Reset par() settings and create a new plot area for legend
   # Similar to plotDistrib approach
-  old_par_legend = par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
-  on.exit(par(old_par_legend))
+  old_par_legend = graphics::par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+  on.exit(graphics::par(old_par_legend))
 
   # Create invisible plot that covers the entire figure
-  plot(0, 0, type = 'n', bty = 'n', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
+  graphics::plot(0, 0, type = 'n', bty = 'n', xaxt = 'n', yaxt = 'n', xlab = '', ylab = '')
 
   # Add legend in the right side
-  legend("right",
+  graphics::legend("right",
          legend = legend_items,
          col = legend_colors,
          lty = legend_lty,
@@ -253,10 +253,10 @@ plotSingleProfile = function(profile_data, param_name, param_index, confidence_i
   # Check if profile computation failed
   if (profile_data$failed) {
     # Create empty plot with error message
-    plot(0, 0, type = "n", xlim = c(0, 1), ylim = c(0, 1),
+    graphics::plot(0, 0, type = "n", xlim = c(0, 1), ylim = c(0, 1),
          xlab = "", ylab = "", yaxt = "n",
          main = param_name, cex.main = par_options$cex)
-    text(0.5, 0.5, "Profile computation\nfailed",
+    graphics::text(0.5, 0.5, "Profile computation\nfailed",
          cex = par_options$cex, col = "red", adj = 0.5)
     return(invisible())
   }
@@ -270,10 +270,10 @@ plotSingleProfile = function(profile_data, param_name, param_index, confidence_i
 
   # Check for valid data
   if (length(grid_values) < 2) {
-    plot(0, 0, type = "n", xlim = c(0, 1), ylim = c(0, 1),
+    graphics::plot(0, 0, type = "n", xlim = c(0, 1), ylim = c(0, 1),
          xlab = "", ylab = "", yaxt = "n",
          main = param_name, cex.main = par_options$cex)
-    text(0.5, 0.5, "Insufficient\nvalid data",
+    graphics::text(0.5, 0.5, "Insufficient\nvalid data",
          cex = par_options$cex, col = "red", adj = 0.5)
     return(invisible())
   }
@@ -281,10 +281,10 @@ plotSingleProfile = function(profile_data, param_name, param_index, confidence_i
   # Filter out invalid values
   valid_indices = is.finite(profile_costs)
   if (sum(valid_indices) < 2) {
-    plot(0, 0, type = "n", xlim = c(0, 1), ylim = c(0, 1),
+    graphics::plot(0, 0, type = "n", xlim = c(0, 1), ylim = c(0, 1),
          xlab = "", ylab = "", yaxt = "n",
          main = param_name, cex.main = par_options$cex)
-    text(0.5, 0.5, "No valid\ndata points",
+    graphics::text(0.5, 0.5, "No valid\ndata points",
          cex = par_options$cex, col = "red", adj = 0.5)
     return(invisible())
   }
@@ -330,34 +330,34 @@ plotSingleProfile = function(profile_data, param_name, param_index, confidence_i
   }
 
   # Create base plot
-  plot(NULL,
+  graphics::plot(NULL,
        xlim = xlim, ylim = ylim, xlab = "", ylab = "",
        yaxt = yaxt_setting, main = param_name, cex.main = par_options$cex)
 
   # Add grid
-  grid(col = "lightgray", lty = 2)
+  graphics::grid(col = "lightgray", lty = 2)
 
   # Plot profile likelihood curve
-  lines(sorted_grid, y_values, lwd = general_options$lwd, col = "blue")
+  graphics::lines(sorted_grid, y_values, lwd = general_options$lwd, col = "blue")
 
   # Add optimal parameter value
   if (general_options$show_optimal) {
-    abline(v = optimized_value, col = "green", lwd = 2, lty = 2)
+    graphics::abline(v = optimized_value, col = "green", lwd = 2, lty = 2)
   }
 
   # Add true value if provided
   if (!is.null(true_value)) {
-    abline(v = true_value, col = "black", lwd = 2, lty = 3)
+    graphics::abline(v = true_value, col = "black", lwd = 2, lty = 3)
   }
 
   # Add likelihood threshold
   if (general_options$show_threshold) {
-    abline(h = threshold_value, col = "red", lwd = 1, lty = 2)
+    graphics::abline(h = threshold_value, col = "red", lwd = 1, lty = 2)
   }
 
   # Add confidence interval bounds
   if (general_options$show_ci && !any(is.na(confidence_interval))) {
-    abline(v = confidence_interval[1], col = "magenta", lwd = 1, lty = 2)
-    abline(v = confidence_interval[2], col = "magenta", lwd = 1, lty = 2)
+    graphics::abline(v = confidence_interval[1], col = "magenta", lwd = 1, lty = 2)
+    graphics::abline(v = confidence_interval[2], col = "magenta", lwd = 1, lty = 2)
   }
 }
