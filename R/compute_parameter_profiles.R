@@ -511,8 +511,8 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     ll_ratio_optimal = 2 * (optimal_grid_cost - min_observed_cost)
     ll_threshold = profile_options$ll_ratio_threshold
     if (!is.na(optimal_grid_cost) && ll_ratio_optimal >= ll_threshold) {
-      warning(sprintf("Likelihood ratio test at provided optimal parameter (%.4f) exceeds threshold (%.4f). Using best parameters found during profiling.",
-                      ll_ratio_optimal, ll_threshold), call. = FALSE)
+      warning(sprintf("Warning in computeLikelihoodProfiles: For parameter %d, likelihood ratio test at provided optimal parameter (%.4f) exceeds threshold (%.4f). Using best parameters found during profiling.",
+                      param_index, ll_ratio_optimal, ll_threshold), call. = FALSE)
 
       # Update the profile data to use the best parameters found
       optimal_param_value = grid_values[min_cost_index]
@@ -684,7 +684,6 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
 
   # Handle single parameter case
   if (length(free_indices) == 0) {
-    browser()
     # Construct full parameter vector with fixed parameter
     full_params = warm_start_params
     full_params[param_index] = fixed_value
