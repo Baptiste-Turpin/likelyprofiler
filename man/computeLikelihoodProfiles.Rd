@@ -39,7 +39,7 @@ computeLikelihoodProfiles(
 List containing:
 \itemize{
 \item \code{profiles}: List of profile data for each parameter
-\item \code{confidence_intervals}: Matrix of \link{lower, upper} bounds for each parameter
+\item \code{confidence_intervals}: Matrix of \eqn{[lower, upper]} bounds for each parameter
 \item \code{summary}: Data frame summarizing results
 }
 }
@@ -66,7 +66,8 @@ The \code{optimizer} can be:
 The \code{optim_options} list can contain optimizer-specific arguments:
 \itemize{
 \item For optim: \code{method}, \code{control}, etc.
-\item For deoptim: \code{itermax}, \code{NP}, etc.
+\item For deoptim: \code{itermax}, \code{NP}, \code{trace}, etc. Default values are: itermax = 100, trace = FALSE.
+Other values are the defaults set by \code{\link[DEoptim]{DEoptim.control}}.
 \item For custom optimizers: any arguments the optimizer function accepts
 }
 }

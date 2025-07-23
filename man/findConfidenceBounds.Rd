@@ -21,7 +21,7 @@ findConfidenceBounds(
 \item{optimal_param_value}{Optimal parameter value from params_current}
 }
 \value{
-Numeric vector \link{lower, upper} confidence bounds
+Numeric vector \eqn{[lower, upper]} confidence bounds
 }
 \description{
 Find Confidence Bounds by Interpolation

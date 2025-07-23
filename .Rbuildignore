@@ -1,3 +1,8 @@
 ^likelyprofiler\.Rproj$
 ^\.Rproj\.user$
 ^LICENSE\.md$
+^doc$
+^Meta$
+^README\.md$
+^NEWS\.md$
+^\.lintr$

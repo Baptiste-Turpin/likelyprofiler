@@ -10,11 +10,9 @@ extractConfidenceInterval(profile_data, profile_options)
 \item{profile_data}{Profile data structure}
 
 \item{profile_options}{Profiling options}
-
-\item{optimal_param_value}{Optimal parameter value from params_current}
 }
 \value{
-Numeric vector \link{lower, upper} confidence bounds
+Numeric vector \eqn{[lower, upper]} confidence bounds
 }
 \description{
 Extract Confidence Interval from Profile

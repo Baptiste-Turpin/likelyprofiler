@@ -1,7 +1,5 @@
 ---
 title: "Profile Likelihood for a Gaussian Mixture Model"
-author: "likelyprofiler Package"
-date: "`r Sys.Date()`"
 output: 
   rmarkdown::html_vignette:
     toc: true

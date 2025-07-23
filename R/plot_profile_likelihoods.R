@@ -239,7 +239,7 @@ addProfileLegend = function(general_options, par_options, true_values) {
 #' @param profile_data Profile data for single parameter
 #' @param param_name Parameter name for plot title
 #' @param param_index Parameter index
-#' @param confidence_interval Confidence interval bounds [lower, upper]
+#' @param confidence_interval Confidence interval bounds \eqn{[lower, upper]}
 #' @param profile_options Profile computation options
 #' @param general_options General plotting options
 #' @param par_options Parameters for par()

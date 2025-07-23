@@ -1,1 +1,19 @@
 .Rproj.user
+
+# Images
+*.png
+*.pdf
+
+# Binary files
+*.dll
+*.so
+*.o
+
+# R history and cache files
+.Rhistory
+inst/doc
+/doc/
+/Meta/
+
+# lintr file
+.lintr

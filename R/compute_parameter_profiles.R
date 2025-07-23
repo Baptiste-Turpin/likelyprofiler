@@ -32,14 +32,15 @@
 #' The \code{optim_options} list can contain optimizer-specific arguments:
 #' \itemize{
 #'   \item For optim: \code{method}, \code{control}, etc.
-#'   \item For deoptim: \code{itermax}, \code{NP}, etc.
+#'   \item For deoptim: \code{itermax}, \code{NP}, \code{trace}, etc. Default values are: itermax = 100, trace = FALSE.
+#'     Other values are the defaults set by \code{\link[DEoptim]{DEoptim.control}}.
 #'   \item For custom optimizers: any arguments the optimizer function accepts
 #' }
 #'
 #' @return List containing:
 #' \itemize{
 #'   \item \code{profiles}: List of profile data for each parameter
-#'   \item \code{confidence_intervals}: Matrix of [lower, upper] bounds for each parameter
+#'   \item \code{confidence_intervals}: Matrix of \eqn{[lower, upper]} bounds for each parameter
 #'   \item \code{summary}: Data frame summarizing results
 #' }
 #'
@@ -149,6 +150,9 @@ computeLikelihoodProfiles = function(params_current,
   )
 
   profile_options = utils::modifyList(default_options, profile_options)
+
+  # Validate profile options
+  validateProfileOptions(profile_options)
 
   # Validate optimizer
   optimizer_info = validateAndSetupOptimizer(optimizer, optim_options, bounds)
@@ -273,15 +277,15 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
     if (!is.list(bounds) || !all(c("lower", "upper") %in% names(bounds))) {
       stop("bounds must be a list with 'lower' and 'upper' elements")
     }
-    
+
     if (!is.numeric(bounds$lower) || !is.numeric(bounds$upper)) {
       stop("bounds$lower and bounds$upper must be numeric vectors")
     }
-    
+
     if (length(bounds$lower) != length(bounds$upper)) {
       stop("bounds$lower and bounds$upper must have the same length")
     }
-    
+
     if (any(bounds$lower >= bounds$upper)) {
       stop("bounds$lower must be less than bounds$upper for all elements")
     }
@@ -299,7 +303,7 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
         # Set method to L-BFGS-B for bound-constrained optimization
         optim_options$method = "L-BFGS-B"
       }
-      
+
       return(list(
         name = "optim",
         type = "builtin",
@@ -310,6 +314,8 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
       if (!requireNamespace("DEoptim", quietly = TRUE)) {
         stop("DEoptim package required but not available. Install with: install.packages('DEoptim')")
       }
+      default_optim_options = DEoptim::DEoptim.control(itermax = 100, trace = FALSE)
+      optim_options = utils::modifyList(default_optim_options, optim_options)
       return(list(
         name = "deoptim",
         type = "builtin",
@@ -336,6 +342,60 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
     ))
   } else {
     stop("optimizer must be a character string ('optim', 'deoptim') or a function")
+  }
+}
+
+#' Validate Profile Options
+#'
+#' @param profile_options List of profiling options to validate
+#' @keywords internal
+validateProfileOptions = function(profile_options) {
+  
+  # Validate grid_method
+  valid_grid_methods = c("uniform", "adaptive")
+  if (!profile_options$grid_method %in% valid_grid_methods) {
+    stop(sprintf("profile_options$grid_method must be one of: %s. Got: '%s'",
+                 paste(valid_grid_methods, collapse = ", "), profile_options$grid_method))
+  }
+  
+  # Validate grid_points
+  if (!is.numeric(profile_options$grid_points) || length(profile_options$grid_points) != 1) {
+    stop("profile_options$grid_points must be a single numeric value")
+  }
+  if (profile_options$grid_points < 3) {
+    stop("profile_options$grid_points must be at least 3")
+  }
+  if (profile_options$grid_points != round(profile_options$grid_points)) {
+    stop("profile_options$grid_points must be an integer")
+  }
+  
+  # Validate max_grid_range_multiplier
+  if (!is.numeric(profile_options$max_grid_range_multiplier) || 
+      length(profile_options$max_grid_range_multiplier) != 1) {
+    stop("profile_options$max_grid_range_multiplier must be a single numeric value")
+  }
+  if (profile_options$max_grid_range_multiplier <= 0) {
+    stop("profile_options$max_grid_range_multiplier must be positive")
+  }
+  
+  # Validate ll_ratio_threshold
+  if (!is.numeric(profile_options$ll_ratio_threshold) || 
+      length(profile_options$ll_ratio_threshold) != 1) {
+    stop("profile_options$ll_ratio_threshold must be a single numeric value")
+  }
+  if (profile_options$ll_ratio_threshold <= 0) {
+    stop("profile_options$ll_ratio_threshold must be positive")
+  }
+  
+  # Issue warnings for potentially problematic values
+  if (profile_options$grid_points > 1000) {
+    warning(sprintf("profile_options$grid_points is very large (%d). This may result in long computation times.",
+                    profile_options$grid_points), call. = FALSE)
+  }
+  
+  if (profile_options$max_grid_range_multiplier > 2) {
+    warning("It is not useful to set profile_options$max_grid_range_multiplier greater than 2.0, as this already covers the whole parameter range.",
+            call. = FALSE)
   }
 }
 
@@ -740,14 +800,10 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
 
     } else if (optimizer_info$name == "deoptim") {
 
-      result = do.call(DEoptim::DEoptim, c(
-        list(
-          fn = conditional_cost,
-          lower = lower_free,
-          upper = upper_free
-        ),
-        optimizer_info$extra_args
-      ))
+      result = DEoptim::DEoptim(fn = conditional_cost,
+                                lower = lower_free,
+                                upper = upper_free,
+                                control = optimizer_info$extra_args)
 
       cost = result$optim$bestval
       exit_flag = "success"  # DEoptim doesn't provide convergence codes
@@ -823,8 +879,7 @@ evaluateConditionalCost = function(free_params, param_index, fixed_value,
 #'
 #' @param profile_data Profile data structure
 #' @param profile_options Profiling options
-#' @param optimal_param_value Optimal parameter value from params_current
-#' @return Numeric vector [lower, upper] confidence bounds
+#' @return Numeric vector \eqn{[lower, upper]} confidence bounds
 #' @keywords internal
 extractConfidenceInterval = function(profile_data, profile_options) {
 
@@ -852,7 +907,7 @@ extractConfidenceInterval = function(profile_data, profile_options) {
 #' @param profile_costs Profile cost values
 #' @param threshold_cost Threshold cost for confidence level
 #' @param optimal_param_value Optimal parameter value from params_current
-#' @return Numeric vector [lower, upper] confidence bounds
+#' @return Numeric vector \eqn{[lower, upper]} confidence bounds
 #' @keywords internal
 findConfidenceBounds = function(grid_values, profile_costs, threshold_cost, optimal_param_value) {
 

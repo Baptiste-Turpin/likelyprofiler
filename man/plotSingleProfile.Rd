@@ -23,7 +23,7 @@ plotSingleProfile(
 
 \item{param_index}{Parameter index}
 
-\item{confidence_interval}{Confidence interval bounds \link{lower, upper}}
+\item{confidence_interval}{Confidence interval bounds \eqn{[lower, upper]}}
 
 \item{profile_options}{Profile computation options}
 
