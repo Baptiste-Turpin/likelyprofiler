@@ -340,8 +340,9 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
       if (!requireNamespace("DEoptim", quietly = TRUE)) {
         stop("Error in validateAndSetupOptimizer: DEoptim package required but not available. Install with: install.packages('DEoptim')")
       }
-      default_optim_options = DEoptim::DEoptim.control(itermax = 100, trace = FALSE)
+      default_optim_options = list(itermax = 100, trace = FALSE)
       optim_options = utils::modifyList(default_optim_options, optim_options)
+      optim_options = do.call(DEoptim::DEoptim.control, optim_options)
       return(list(
         name = "deoptim",
         type = "builtin",
@@ -456,7 +457,6 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
     if (j < 1 || j > length(grid_values)){
       stop("Error in optimizeGridDirection: grid index out of bounds")
     }
-    browser()
 
     tryCatch({
       result = optimizeConditional(
@@ -827,20 +827,6 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
       exit_flag = if (result$convergence == 0) "success" else paste0("convergence_", result$convergence)
 
     } else if (optimizer_info$name == "deoptim") {
-      # Check that we have valid bounds for DEoptim
-      if (length(lower_free) == 0 || length(upper_free) == 0) {
-        stop("Error in optimizeConditional: DEoptim requires at least one free parameter")
-      }
-      if (length(lower_free) != length(upper_free)) {
-        stop("Error in optimizeConditional: DEoptim lower and upper bounds must have same length")
-      }
-      if (any(is.na(lower_free)) || any(is.na(upper_free))) {
-        stop("Error in optimizeConditional: DEoptim bounds cannot contain NA values")
-      }
-      if (any(lower_free >= upper_free)) {
-        stop("Error in optimizeConditional: DEoptim requires lower < upper for all parameters")
-      }
-      browser()
 
       result = DEoptim::DEoptim(fn = conditional_cost,
                                 lower = lower_free,
@@ -913,9 +899,7 @@ evaluateConditionalCost = function(free_params, param_index, fixed_value,
   full_params[free_indices] = free_params
 
   # Call cost function with likelihood arguments only
-  print(full_params)
   res = do.call(negLogLikelihood, c(list(full_params), likelihood_args))
-  print(res)
   res
 }
 
