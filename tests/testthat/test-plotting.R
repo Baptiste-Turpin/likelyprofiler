@@ -1,9 +1,9 @@
 # Test plotting functions
 
 test_that("Plotting functions work", {
-  setup <- setup_gaussian_mixture(d = 2)
+  setup = setup_gaussian_mixture(d = 2)
 
-  result <- computeLikelihoodProfiles(
+  result = computeLikelihoodProfiles(
     params_current = setup$optimized_params,
     negLogLikelihood = setup$mlogf,
     bounds = setup$bounds,
@@ -29,6 +29,6 @@ test_that("Plotting functions work", {
   # Test invalid input
   expect_error(
     plotLikelihoodProfiles("invalid"),
-    "profile_result must be a list from computeLikelihoodProfiles"
+    "Error in plotLikelihoodProfiles: profile_result must be a list from computeLikelihoodProfiles"
   )
 })

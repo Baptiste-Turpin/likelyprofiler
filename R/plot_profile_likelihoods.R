@@ -81,7 +81,7 @@ plotLikelihoodProfiles = function(profile_result, options = list(), plot_options
 
   # Validate input
   if (!is.list(profile_result) || !all(c("profiles", "confidence_intervals", "options") %in% names(profile_result))) {
-    stop("profile_result must be a list from computeLikelihoodProfiles()")
+    stop("Error in plotLikelihoodProfiles: profile_result must be a list from computeLikelihoodProfiles()")
   }
 
   # Set default options
@@ -125,7 +125,7 @@ plotLikelihoodProfiles = function(profile_result, options = list(), plot_options
   # Validate true_values if provided
   if (!is.null(true_values)) {
     if (length(true_values) != n_params) {
-      warning("Length of true_values does not match number of parameters. Ignoring true_values.")
+      warning("Warning in plotLikelihoodProfiles: Length of true_values does not match number of parameters. Ignoring true_values.")
       true_values = NULL
     }
   }

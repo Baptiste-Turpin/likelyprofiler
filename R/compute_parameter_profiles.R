@@ -136,21 +136,35 @@ computeLikelihoodProfiles = function(params_current,
 
   # Validate inputs
   if (!is.numeric(params_current)) {
-    stop("params_current must be a numeric vector")
+    stop("Error in computeLikelihoodProfiles: params_current must be a numeric vector")
   }
 
   if (!is.function(negLogLikelihood)) {
-    stop("negLogLikelihood must be a function")
+    stop("Error in computeLikelihoodProfiles: negLogLikelihood must be a function")
   }
 
   if (!is.list(bounds) || !all(c("lower", "upper") %in% names(bounds))) {
-    stop("bounds must be a list with 'lower' and 'upper' elements")
+    stop("Error in computeLikelihoodProfiles: bounds must be a list with 'lower' and 'upper' elements")
   }
 
   n_params = length(params_current)
 
   if (length(bounds$lower) != n_params || length(bounds$upper) != n_params) {
-    stop("bounds dimensions must match parameter vector length")
+    stop("Error in computeLikelihoodProfiles: bounds dimensions must match parameter vector length")
+  }
+
+  if (!is.numeric(bounds$lower) || !is.numeric(bounds$upper)) {
+    stop("Error in computeLikelihoodProfiles: bounds$lower and bounds$upper must be numeric vectors")
+  }
+  if (any(bounds$lower >= bounds$upper)) {
+    stop("Error in computeLikelihoodProfiles: bounds$lower must be less than bounds$upper for all elements")
+  }
+  if (any(params_current < bounds$lower) || any(params_current > bounds$upper)) {
+    stop("Error in computeLikelihoodProfiles: params_current must be within the specified bounds")
+  }
+
+  if (is.null(names(params_current))) {
+    names(params_current) = paste0("param_", 1:n_params)
   }
 
   # Set default profile options
@@ -185,7 +199,7 @@ computeLikelihoodProfiles = function(params_current,
   # Initialize output arrays
   profiles = vector("list", n_params)
   confidence_intervals = matrix(NA, nrow = n_params, ncol = 2)
-  rownames(confidence_intervals) = names(params_current) %||% paste0("param_", 1:n_params)
+  rownames(confidence_intervals) = names(params_current)
   colnames(confidence_intervals) = c("2.5%", "97.5%")
 
   # Record computation start time
@@ -287,19 +301,19 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
   # Validate bounds if provided
   if (!is.null(bounds)) {
     if (!is.list(bounds) || !all(c("lower", "upper") %in% names(bounds))) {
-      stop("bounds must be a list with 'lower' and 'upper' elements")
+      stop("Error in validateAndSetupOptimizer: bounds must be a list with 'lower' and 'upper' elements")
     }
 
     if (!is.numeric(bounds$lower) || !is.numeric(bounds$upper)) {
-      stop("bounds$lower and bounds$upper must be numeric vectors")
+      stop("Error in validateAndSetupOptimizer: bounds$lower and bounds$upper must be numeric vectors")
     }
 
     if (length(bounds$lower) != length(bounds$upper)) {
-      stop("bounds$lower and bounds$upper must have the same length")
+      stop("Error in validateAndSetupOptimizer: bounds$lower and bounds$upper must have the same length")
     }
 
     if (any(bounds$lower >= bounds$upper)) {
-      stop("bounds$lower must be less than bounds$upper for all elements")
+      stop("Error in validateAndSetupOptimizer: bounds$lower must be less than bounds$upper for all elements")
     }
   }
 
@@ -310,7 +324,7 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
         # Check if method is already specified
         current_method = optim_options$method
         if (!is.null(current_method) && current_method != "L-BFGS-B") {
-          warning(sprintf("Method '%s' specified for optim with bounds. Changing to 'L-BFGS-B' to handle bounds properly.", current_method), call. = FALSE)
+          warning(sprintf("Warning in validateAndSetupOptimizer: Method '%s' specified for optim with bounds. Changing to 'L-BFGS-B' to handle bounds properly.", current_method), call. = FALSE)
         }
         # Set method to L-BFGS-B for bound-constrained optimization
         optim_options$method = "L-BFGS-B"
@@ -324,7 +338,7 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
     } else if (optimizer == "deoptim") {
       # Check if DEoptim is available
       if (!requireNamespace("DEoptim", quietly = TRUE)) {
-        stop("DEoptim package required but not available. Install with: install.packages('DEoptim')")
+        stop("Error in validateAndSetupOptimizer: DEoptim package required but not available. Install with: install.packages('DEoptim')")
       }
       default_optim_options = DEoptim::DEoptim.control(itermax = 100, trace = FALSE)
       optim_options = utils::modifyList(default_optim_options, optim_options)
@@ -334,7 +348,7 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
         extra_args = optim_options
       ))
     } else {
-      stop(sprintf("Unknown optimizer: '%s'. Use 'optim', 'deoptim', or provide a custom function.", optimizer))
+      stop(sprintf("Error in validateAndSetupOptimizer: Unknown optimizer: '%s'. Use 'optim', 'deoptim', or provide a custom function.", optimizer))
     }
   } else if (is.function(optimizer)) {
     # Validate custom optimizer signature
@@ -342,7 +356,7 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
     required_args = c("fn", "par", "lower", "upper")
 
     if (!all(required_args %in% arg_names)) {
-      stop(sprintf("Custom optimizer must have signature: function(fn, par, lower, upper, ...) \nMissing arguments: %s",
+      stop(sprintf("Error in validateAndSetupOptimizer: Custom optimizer must have signature: function(fn, par, lower, upper, ...) \nMissing arguments: %s",
                    paste(setdiff(required_args, arg_names), collapse = ", ")))
     }
 
@@ -353,7 +367,7 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
       extra_args = optim_options
     ))
   } else {
-    stop("optimizer must be a character string ('optim', 'deoptim') or a function")
+    stop("Error in validateAndSetupOptimizer: optimizer must be a character string ('optim', 'deoptim') or a function")
   }
 }
 
@@ -366,53 +380,50 @@ validateProfileOptions = function(profile_options) {
   # Validate grid_method
   valid_grid_methods = c("uniform", "adaptive")
   if (!profile_options$grid_method %in% valid_grid_methods) {
-    stop(sprintf("profile_options$grid_method must be one of: %s. Got: '%s'",
+    stop(sprintf("Error in validateProfileOptions: profile_options$grid_method must be one of: %s. Got: '%s'",
                  paste(valid_grid_methods, collapse = ", "), profile_options$grid_method))
   }
 
   # Validate grid_points
   if (!is.numeric(profile_options$grid_points) || length(profile_options$grid_points) != 1) {
-    stop("profile_options$grid_points must be a single numeric value")
+    stop("Error in validateProfileOptions: profile_options$grid_points must be a single numeric value")
   }
   if (profile_options$grid_points < 3) {
-    stop("profile_options$grid_points must be at least 3")
+    stop("Error in validateProfileOptions: profile_options$grid_points must be at least 3")
   }
   if (profile_options$grid_points != round(profile_options$grid_points)) {
-    stop("profile_options$grid_points must be an integer")
+    stop("Error in validateProfileOptions: profile_options$grid_points must be an integer")
   }
 
   # Validate max_grid_range_multiplier
   if (!is.numeric(profile_options$max_grid_range_multiplier) ||
       length(profile_options$max_grid_range_multiplier) != 1) {
-    stop("profile_options$max_grid_range_multiplier must be a single numeric value")
+    stop("Error in validateProfileOptions: profile_options$max_grid_range_multiplier must be a single numeric value")
   }
   if (profile_options$max_grid_range_multiplier <= 0) {
-    stop("profile_options$max_grid_range_multiplier must be positive")
+    stop("Error in validateProfileOptions: profile_options$max_grid_range_multiplier must be positive")
   }
 
   # Validate ll_ratio_threshold
   if (!is.numeric(profile_options$ll_ratio_threshold) ||
       length(profile_options$ll_ratio_threshold) != 1) {
-    stop("profile_options$ll_ratio_threshold must be a single numeric value")
+    stop("Error in validateProfileOptions: profile_options$ll_ratio_threshold must be a single numeric value")
   }
   if (profile_options$ll_ratio_threshold <= 0) {
-    stop("profile_options$ll_ratio_threshold must be positive")
+    stop("Error in validateProfileOptions: profile_options$ll_ratio_threshold must be positive")
   }
 
   # Issue warnings for potentially problematic values
   if (profile_options$grid_points > 1000) {
-    warning(sprintf("profile_options$grid_points is very large (%d). This may result in long computation times.",
+    warning(sprintf("Warning in validateProfileOptions: profile_options$grid_points is very large (%d). This may result in long computation times.",
                     profile_options$grid_points), call. = FALSE)
   }
 
   if (profile_options$max_grid_range_multiplier > 2) {
-    warning("It is not useful to set profile_options$max_grid_range_multiplier greater than 2.0, as this already covers the whole parameter range.",
+    warning("Warning in validateProfileOptions: It is not useful to set profile_options$max_grid_range_multiplier greater than 2.0, as this already covers the whole parameter range.",
             call. = FALSE)
   }
 }
-
-# Utility function for null coalescing
-`%||%` = function(x, y) if (is.null(x)) y else x
 
 #' Optimize Grid Direction
 #'
@@ -445,6 +456,7 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
     if (j < 1 || j > length(grid_values)){
       stop("Error in optimizeGridDirection: grid index out of bounds")
     }
+    browser()
 
     tryCatch({
       result = optimizeConditional(
@@ -473,7 +485,7 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
       # On failure, keep using previous warm start parameters
 
     }, error = function(e) {
-      warning(sprintf("Optimization failed for parameter %d at grid point %d: %s",
+      warning(sprintf("Warning in optimizeGridDirection: Optimization failed for parameter %d at grid point %d: %s",
                       param_index, j, e$message))
       profile_costs[j] = NA
       optimizer_exit_flags[j] = "error"
@@ -577,27 +589,31 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     success_count = success_count + right_result$success_count
 
     # Optimize left side (from optimal outward) - reset warm start
-    left_result = optimizeGridDirection(
-      grid_indices = (optimal_index-1):1,
-      param_index = param_index,
-      grid_values = grid_values,
-      warm_start_params = params_current,  # Reset to original optimal params
-      negLogLikelihood = negLogLikelihood,
-      bounds = bounds,
-      optimizer_info = optimizer_info,
-      likelihood_args = likelihood_args,
-      profile_costs = profile_costs,
-      optimizer_exit_flags = optimizer_exit_flags,
-      optimal_params_matrix = optimal_params_matrix,
-      optimization_success = optimization_success
-    )
+    # Only happens if the optimal index is not the first grid point
+    # i.e. there is a left side to explore
+    if (optimal_index > 1) {
+      left_result = optimizeGridDirection(
+        grid_indices = seq(optimal_index-1, 1),
+        param_index = param_index,
+        grid_values = grid_values,
+        warm_start_params = params_current,  # Reset to original optimal params
+        negLogLikelihood = negLogLikelihood,
+        bounds = bounds,
+        optimizer_info = optimizer_info,
+        likelihood_args = likelihood_args,
+        profile_costs = profile_costs,
+        optimizer_exit_flags = optimizer_exit_flags,
+        optimal_params_matrix = optimal_params_matrix,
+        optimization_success = optimization_success
+      )
 
-    # Update arrays with left side results
-    profile_costs = left_result$profile_costs
-    optimizer_exit_flags = left_result$optimizer_exit_flags
-    optimal_params_matrix = left_result$optimal_params_matrix
-    optimization_success = left_result$optimization_success
-    success_count = success_count + left_result$success_count
+      # Update arrays with left side results
+      profile_costs = left_result$profile_costs
+      optimizer_exit_flags = left_result$optimizer_exit_flags
+      optimal_params_matrix = left_result$optimal_params_matrix
+      optimization_success = left_result$optimization_success
+      success_count = success_count + left_result$success_count
+    }
 
     # Calculate success rate and set exit flags
     success_rate = success_count / n_grid
@@ -655,7 +671,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     ))
 
   }, error = function(e) {
-    warning(sprintf("Failed to compute profile for parameter %d: %s", param_index, e$message))
+    warning(sprintf("Warning in computeParameterProfile: Failed to compute profile for parameter %d: %s", param_index, e$message))
 
     profile_data = list(
       param_index = param_index,
@@ -712,7 +728,7 @@ createParameterGrid = function(param_index, params_current, bounds, profile_opti
   } else if (profile_options$grid_method == "adaptive") {
     grid_values = createAdaptiveGrid(grid_lower, grid_upper, current_value, profile_options$grid_points)
   } else {
-    stop(sprintf("Unknown grid method: %s", profile_options$grid_method))
+    stop(sprintf("Error in createParameterGrid: Unknown grid method: %s", profile_options$grid_method))
   }
 
   # Check for grid issues
@@ -774,7 +790,7 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
                                negLogLikelihood, bounds, optimizer_info, likelihood_args = list()) {
 
   # Create conditional cost function
-  conditional_cost = function(free_params, ...) {
+  conditional_cost = function(free_params) {
     evaluateConditionalCost(free_params, param_index, fixed_value,
                             warm_start_params, negLogLikelihood, likelihood_args)
   }
@@ -811,6 +827,20 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
       exit_flag = if (result$convergence == 0) "success" else paste0("convergence_", result$convergence)
 
     } else if (optimizer_info$name == "deoptim") {
+      # Check that we have valid bounds for DEoptim
+      if (length(lower_free) == 0 || length(upper_free) == 0) {
+        stop("Error in optimizeConditional: DEoptim requires at least one free parameter")
+      }
+      if (length(lower_free) != length(upper_free)) {
+        stop("Error in optimizeConditional: DEoptim lower and upper bounds must have same length")
+      }
+      if (any(is.na(lower_free)) || any(is.na(upper_free))) {
+        stop("Error in optimizeConditional: DEoptim bounds cannot contain NA values")
+      }
+      if (any(lower_free >= upper_free)) {
+        stop("Error in optimizeConditional: DEoptim requires lower < upper for all parameters")
+      }
+      browser()
 
       result = DEoptim::DEoptim(fn = conditional_cost,
                                 lower = lower_free,
@@ -833,9 +863,9 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
       optimizer_info$extra_args
     ))
 
-    # Extract cost and exit flag based on expected structure
+    # Extract cost, exit flag based on expected structure
     if (is.list(result)) {
-      cost = result$value %||% result$minimum %||% result$cost %||% result$objective
+      cost = result$value
       exit_flag = if (!is.null(result$convergence)) {
         if (result$convergence == 0) "success" else paste0("convergence_", result$convergence)
       } else {
@@ -855,7 +885,7 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
     optimal_params[free_indices] = result$optim$bestmem
   } else if (optimizer_info$type == "function") {
     if (is.list(result)) {
-      optimal_params[free_indices] = result$par %||% result$minimum %||% result$solution %||% result$x
+      optimal_params[free_indices] = result$par
     }
   }
   optimal_params[param_index] = fixed_value  # Ensure fixed parameter stays fixed
@@ -875,7 +905,6 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
 #' @keywords internal
 evaluateConditionalCost = function(free_params, param_index, fixed_value,
                                    warm_start_params, negLogLikelihood, likelihood_args = list()) {
-
   # Reconstruct full parameter vector
   full_params = warm_start_params
   full_params[param_index] = fixed_value
@@ -884,7 +913,10 @@ evaluateConditionalCost = function(free_params, param_index, fixed_value,
   full_params[free_indices] = free_params
 
   # Call cost function with likelihood arguments only
-  do.call(negLogLikelihood, c(list(full_params), likelihood_args))
+  print(full_params)
+  res = do.call(negLogLikelihood, c(list(full_params), likelihood_args))
+  print(res)
+  res
 }
 
 #' Extract Confidence Interval from Profile
@@ -1036,27 +1068,27 @@ issueConsolidatedWarnings = function(profiles, n_params) {
 
   # Issue warnings
   if (length(failed_params) > 0) {
-    warning(sprintf("Profile computation failed for parameter(s): %s",
+    warning(sprintf("Warning in computeLikelihoodProfiles: Profile computation failed for parameter(s): %s",
                     paste(failed_params, collapse = ", ")), call. = FALSE)
   }
 
   if (length(low_success_rate_params) > 0) {
-    warning(sprintf("Low optimization success rate (<50%%) for parameter(s): %s",
+    warning(sprintf("Warning in computeLikelihoodProfiles: Low optimization success rate (<50%%) for parameter(s): %s",
                     paste(low_success_rate_params, collapse = ", ")), call. = FALSE)
   }
 
   if (length(ci_failed_params) > 0) {
-    warning(sprintf("Failed to extract confidence intervals for parameter(s): %s",
+    warning(sprintf("Warning in computeLikelihoodProfiles: Failed to extract confidence intervals for parameter(s): %s",
                     paste(ci_failed_params, collapse = ", ")), call. = FALSE)
   }
 
   if (length(bounds_issue_params) > 0) {
-    warning(sprintf("Optimal values outside bounds for parameter(s): %s",
+    warning(sprintf("Warning in computeLikelihoodProfiles: Optimal values outside bounds for parameter(s): %s",
                     paste(bounds_issue_params, collapse = ", ")), call. = FALSE)
   }
 
   if (length(grid_issue_params) > 0) {
-    warning(sprintf("Grid coverage issues for parameter(s): %s",
+    warning(sprintf("Warning in computeLikelihoodProfiles: Grid coverage issues for parameter(s): %s",
                     paste(grid_issue_params, collapse = ", ")), call. = FALSE)
   }
 }
@@ -1074,12 +1106,12 @@ validateProfileResults = function(profiles, confidence_intervals, n_params, verb
   valid_profiles = sum(!sapply(profiles, function(p) isTRUE(p$failed)))
 
   if (valid_profiles == 0) {
-    stop("All parameter profiles failed to compute. Check cost function and bounds.")
+    stop("Error in computeLikelihoodProfiles: All parameter profiles failed to compute. Check cost function and bounds.")
   }
 
   if (verbose && valid_profiles < n_params) {
-    cat(sprintf("Warning: Only %d/%d profiles computed successfully.\n",
-                valid_profiles, n_params))
+    warning(sprintf("Warning in validateProfileResults: Only %d/%d profiles computed successfully.\n",
+                    valid_profiles, n_params))
   }
 
   # Check confidence interval validity and quality
@@ -1087,8 +1119,8 @@ validateProfileResults = function(profiles, confidence_intervals, n_params, verb
 
   if (verbose && any(invalid_ci)) {
     invalid_params = which(invalid_ci)
-    cat(sprintf("Warning: Confidence intervals could not be determined for parameter(s): %s\n",
-                paste(invalid_params, collapse = ", ")))
+    warning(sprintf("Warning in validateProfileResults: Confidence intervals could not be determined for parameter(s): %s\n",
+                    paste(invalid_params, collapse = ", ")))
   }
 
   # Check for CI quality issues
@@ -1100,10 +1132,10 @@ validateProfileResults = function(profiles, confidence_intervals, n_params, verb
       extremely_narrow = sum(ci_widths < 1e-10, na.rm = TRUE)
 
       if (extremely_wide > 0) {
-        cat(sprintf("Warning: %d parameters have very wide confidence intervals (>1000).\n", extremely_wide))
+        warning(sprintf("Warning in validateProfileResults: %d parameters have very wide confidence intervals (>1000).\n", extremely_wide))
       }
       if (extremely_narrow > 0) {
-        cat(sprintf("Warning: %d parameters have very narrow confidence intervals (<1e-10).\n", extremely_narrow))
+        warning(sprintf("Warning in validateProfileResults: %d parameters have very narrow confidence intervals (<1e-10).\n", extremely_narrow))
       }
     }
   }

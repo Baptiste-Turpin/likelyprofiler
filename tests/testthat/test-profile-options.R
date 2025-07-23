@@ -1,10 +1,10 @@
 # Test different profile options
 
 test_that("Different profile options work", {
-  setup <- setup_gaussian_mixture(d = 3)
+  setup = setup_gaussian_mixture(d = 3)
 
   # Test uniform grid
-  result_uniform <- computeLikelihoodProfiles(
+  result_uniform = computeLikelihoodProfiles(
     params_current = setup$optimized_params,
     negLogLikelihood = setup$mlogf,
     bounds = setup$bounds,
@@ -18,7 +18,7 @@ test_that("Different profile options work", {
   )
 
   # Test adaptive grid
-  result_adaptive <- computeLikelihoodProfiles(
+  result_adaptive = computeLikelihoodProfiles(
     params_current = setup$optimized_params,
     negLogLikelihood = setup$mlogf,
     bounds = setup$bounds,
@@ -47,6 +47,6 @@ test_that("Different profile options work", {
       verbose = FALSE,
       gamma = setup$gamma
     ),
-    "profile_options\\$grid_method must be one of: uniform, adaptive"
+    "Error in validateProfileOptions: profile_options\\$grid_method must be one of: uniform, adaptive"
   )
 })
