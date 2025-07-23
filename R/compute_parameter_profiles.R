@@ -1,38 +1,50 @@
 #' Compute Profile Likelihood for All Parameters
 #'
-#' Compute profile likelihood confidence intervals for all parameters in parallel
-#' using a grid-based approach with customizable optimization methods.
+#' Compute profile likelihood confidence intervals for all parameters in
+#' parallel using a grid-based approach with customizable optimization methods.
 #'
 #' @param params_current Numeric vector of parameters at optimum
-#' @param negLogLikelihood Function that takes parameter vector and returns scalar cost
-#' @param bounds List with elements 'lower' and 'upper' containing parameter bounds
+#' @param negLogLikelihood Function that takes parameter vector and returns
+#'   scalar cost
+#' @param bounds List with elements 'lower' and 'upper' containing parameter
+#'   bounds
 #' @param profile_options List of profiling options (see Details)
-#' @param optimizer Character string or function specifying optimizer (default: "optim")
+#' @param optimizer Character string or function specifying optimizer (default:
+#'   "optim")
 #' @param optim_options List of optimizer-specific arguments (default: list())
 #' @param verbose Logical indicating whether to print progress messages
-#' @param cluster Optional cluster object for parallel computation (default: NULL)
+#' @param cluster Optional cluster object for parallel computation (default:
+#'   NULL)
 #' @param ... Additional arguments passed to the `negLogLikelihood` function
 #'
-#' @details
-#' The \code{profile_options} list can contain:
+#' @details The \code{profile_options} list can contain:
 #' \itemize{
-#'   \item \code{grid_method}: "uniform" or "adaptive" (default: "uniform")
-#'   \item \code{grid_points}: Number of grid points per parameter (default: 25)
-#'   \item \code{max_grid_range_multiplier}: Grid range multiplier (default: 2.0)
+#'   \item \code{grid_method}: "uniform" or "adaptive" (default: "adaptive").
+#'   "uniform" uses evenly spaced grid points, "adaptive" adjusts the density of grid points
+#'   to be more dense near the optimum using a quadratic spacing.
+#'   \item \code{grid_points}: Number of grid points per parameter (default: 100)
+#'   \item \code{max_grid_range_multiplier}: Controls the width of the profiling grid as a
+#'   fraction of the total parameter range defined by bounds. The grid is centered around
+#'   the current parameter value and extends max_range/2 in each direction, where
+#'   max_range = max_grid_range_multiplier * (upper_bound - lower_bound). A value of 1.0
+#'   covers the full parameter range for a parameter in the center of the range,
+#'   while 2.0 (default) attempts to cover twice the
+#'   range but is constrained by the bounds, this ensures that the whole range is covered even if the
+#'   parameter is near the boundary.
 #'   \item \code{ll_ratio_threshold}: Likelihood ratio threshold for CI (default: 3.84)
 #' }
 #'
-#' The \code{optimizer} can be:
+#'   The \code{optimizer} can be:
 #' \itemize{
 #'   \item \code{"optim"}: Use base R optim() with options via optim_options
 #'   \item \code{"deoptim"}: Use DEoptim package (must be installed)
 #'   \item A function with signature: function(fn, par, lower, upper, ...)
 #' }
 #'
-#' The \code{optim_options} list can contain optimizer-specific arguments:
+#'   The \code{optim_options} list can contain optimizer-specific arguments:
 #' \itemize{
 #'   \item For optim: \code{method}, \code{control}, etc.
-#'   \item For deoptim: \code{itermax}, \code{NP}, \code{trace}, etc. Default values are: itermax = 100, trace = FALSE.
+#'   \item For deoptim: \code{itermax}, \code{NP}, \code{trace}, etc. Default values are: `itermax = 100, trace = FALSE`.
 #'     Other values are the defaults set by \code{\link[DEoptim]{DEoptim.control}}.
 #'   \item For custom optimizers: any arguments the optimizer function accepts
 #' }
@@ -143,7 +155,7 @@ computeLikelihoodProfiles = function(params_current,
 
   # Set default profile options
   default_options = list(
-    grid_method = "uniform",
+    grid_method = "adaptive",
     grid_points = 100,
     max_grid_range_multiplier = 2.0,
     ll_ratio_threshold = 3.84  # 95% CI for chi-square with 1 df
@@ -350,14 +362,14 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
 #' @param profile_options List of profiling options to validate
 #' @keywords internal
 validateProfileOptions = function(profile_options) {
-  
+
   # Validate grid_method
   valid_grid_methods = c("uniform", "adaptive")
   if (!profile_options$grid_method %in% valid_grid_methods) {
     stop(sprintf("profile_options$grid_method must be one of: %s. Got: '%s'",
                  paste(valid_grid_methods, collapse = ", "), profile_options$grid_method))
   }
-  
+
   # Validate grid_points
   if (!is.numeric(profile_options$grid_points) || length(profile_options$grid_points) != 1) {
     stop("profile_options$grid_points must be a single numeric value")
@@ -368,31 +380,31 @@ validateProfileOptions = function(profile_options) {
   if (profile_options$grid_points != round(profile_options$grid_points)) {
     stop("profile_options$grid_points must be an integer")
   }
-  
+
   # Validate max_grid_range_multiplier
-  if (!is.numeric(profile_options$max_grid_range_multiplier) || 
+  if (!is.numeric(profile_options$max_grid_range_multiplier) ||
       length(profile_options$max_grid_range_multiplier) != 1) {
     stop("profile_options$max_grid_range_multiplier must be a single numeric value")
   }
   if (profile_options$max_grid_range_multiplier <= 0) {
     stop("profile_options$max_grid_range_multiplier must be positive")
   }
-  
+
   # Validate ll_ratio_threshold
-  if (!is.numeric(profile_options$ll_ratio_threshold) || 
+  if (!is.numeric(profile_options$ll_ratio_threshold) ||
       length(profile_options$ll_ratio_threshold) != 1) {
     stop("profile_options$ll_ratio_threshold must be a single numeric value")
   }
   if (profile_options$ll_ratio_threshold <= 0) {
     stop("profile_options$ll_ratio_threshold must be positive")
   }
-  
+
   # Issue warnings for potentially problematic values
   if (profile_options$grid_points > 1000) {
     warning(sprintf("profile_options$grid_points is very large (%d). This may result in long computation times.",
                     profile_options$grid_points), call. = FALSE)
   }
-  
+
   if (profile_options$max_grid_range_multiplier > 2) {
     warning("It is not useful to set profile_options$max_grid_range_multiplier greater than 2.0, as this already covers the whole parameter range.",
             call. = FALSE)

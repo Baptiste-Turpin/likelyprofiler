@@ -74,7 +74,7 @@ optimized_params = true_params + rnorm(length(true_params), sd = 0.05)
 names(true_params) = names(optimized_params) = paste0("param_", 1:d)
 ```
 
-Now we can perform profile likelihood computation using the `computeLikelihoodProfiles` function.
+Now we can perform profile likelihood computation using the `computeLikelihoodProfiles` function. See the documentation of the function for options.
 
 ```{r}
 library(likelyprofiler)
@@ -106,4 +106,26 @@ Finally, we can visualize the profile likelihood using the `plotLikelihoodProfil
 plotLikelihoodProfiles(result,
                        true_values = true_params
 )
+```
+
+## Parallel Computation
+
+The `computeLikelihoodProfiles` function supports parallel computation to speed up the profile likelihood calculation.
+
+```{r}
+# Create a cluster with 2 cores
+cluster = parallel::makeCluster(2)
+
+# Compute profile likelihood in parallel
+result_parallel = computeLikelihoodProfiles(
+  params_current = optimized_params,
+  negLogLikelihood = mlogf,
+  bounds = bounds,
+  gamma = gamma,
+  cluster = cluster
+)
+
+# Stop the cluster after computation
+parallel::stopCluster(cluster)
+
 ```
