@@ -1,6 +1,6 @@
 Package: likelyprofiler
 Title: Likelihood Profiles for Nonlinear Objective Functions
-Version: 0.0.0.9000
+Version: 0.9.0
 Authors@R: 
     person(given = "Baptiste",
            family = "Turpin",
