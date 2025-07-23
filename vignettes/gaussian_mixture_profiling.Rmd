@@ -112,7 +112,7 @@ plotLikelihoodProfiles(result,
 
 The `computeLikelihoodProfiles` function supports parallel computation to speed up the profile likelihood calculation.
 
-```{r}
+```{r, eval=FALSE}
 # Create a cluster with 2 cores
 cluster = parallel::makeCluster(2)
 
