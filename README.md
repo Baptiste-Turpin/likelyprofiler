@@ -17,7 +17,7 @@ The following must be installed prior to installing the package:
 
 Then run the following command in R:
 ```R
-remotes::install_git(url = "https://gitlab.com/your-username/likelyprofiler", build_vignettes = TRUE, dependencies = TRUE)
+remotes::install_git(url = "https://gitlab.com/csb.ethz/likelyprofiler", build_vignettes = TRUE, dependencies = TRUE)
 ```
 Alternatively, you can set `build_vignettes = FALSE` if you do not wish to use the vignettes for documentation.
 
