@@ -143,5 +143,9 @@ result_parallel = computeLikelihoodProfiles(
 
 # Stop the cluster after computation
 parallel::stopCluster(cluster)
+```
 
+For details, see the corresponding vignette:
+```{r, eval=FALSE}
+vignette("parallel_profiling", package = "likelyprofiler")
 ```

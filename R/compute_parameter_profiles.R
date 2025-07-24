@@ -17,7 +17,7 @@
 #'   NULL)
 #' @param nested_cluster_call Optional expression to create a nested cluster
 #'   for DEoptim parallel computation within each parameter profile (default: NULL).
-#'   Only used when optimizer is "deoptim". The expression should create an object 
+#'   Only used when optimizer is "deoptim". The expression should create an object
 #'   named `nested_cluster` when evaluated. This enables nested parallelization:
 #'   outer parallelization across parameters, inner parallelization within \code{\link[DEoptim]{DEoptim}}.
 #' @param ... Additional arguments passed to the `negLogLikelihood` function
@@ -55,13 +55,13 @@
 #' }
 #'
 #' @section Nested Parallel Computation:
-#' For DEoptim optimization, nested parallelization can be enabled using the 
+#' For DEoptim optimization, nested parallelization can be enabled using the
 #' \code{nested_cluster_call} parameter. This allows:
 #' \itemize{
 #'   \item Outer parallelization: Multiple parameter profiles computed in parallel using \code{cluster}
 #'   \item Inner parallelization: DEoptim uses parallel computation within each profile using a nested cluster
 #' }
-#' 
+#'
 #' The \code{nested_cluster_call} should be an expression (e.g., created with \code{quote()}) that,
 #' when evaluated, creates an object named \code{nested_cluster}. For example:
 #' \code{nested_cluster_call = quote({nested_cluster = parallel::makeCluster(2)
@@ -541,12 +541,12 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
 #' @keywords internal
 computeParameterProfile = function(param_index, params_current, negLogLikelihood,
                                    bounds, profile_options, optimizer_info,
-                                   likelihood_args = list(), 
+                                   likelihood_args = list(),
                                    nested_cluster_call = NULL,
                                    verbose = FALSE) {
 
   if (!is.null(nested_cluster_call) && optimizer_info$name == "deoptim") {
-    # Evaluate the expression 'nested_cluster_call' 
+    # Evaluate the expression 'nested_cluster_call'
     # It defines the object `nested_cluster`
     tryCatch({
       eval(nested_cluster_call)
@@ -874,12 +874,23 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
                                                              lower_free = lower_free,
                                                              upper_free = upper_free,
                                                              initial_free_params = initial_free_params)
-      optimizer_info$extra_args$cluster = nested_cluster  # Pass nested cluster if available
+      if (!is.null(nested_cluster)){
+        optimizer_info$extra_args$cluster = nested_cluster  # Pass nested cluster if available
+      }
       deoptim_control = do.call(DEoptim::DEoptim.control, optimizer_info$extra_args)
-      result = DEoptim::DEoptim(fn = conditional_cost,
-                                lower = lower_free,
-                                upper = upper_free,
-                                control = deoptim_control)
+
+      # Suppress the specific NP warning while preserving other warnings
+      result = withCallingHandlers({
+        DEoptim::DEoptim(fn = conditional_cost,
+                         lower = lower_free,
+                         upper = upper_free,
+                         control = deoptim_control)
+      }, warning = function(w) {
+        # Suppress warnings about NP population size recommendation
+        if (grepl("For many problems it is best to set 'NP'", w$message, fixed = TRUE)) {
+          invokeRestart("muffleWarning")
+        }
+      })
 
       cost = result$optim$bestval
       exit_flag = "success"  # DEoptim doesn't provide convergence codes
