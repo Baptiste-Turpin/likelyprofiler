@@ -16,7 +16,8 @@ optimizeGridDirection(
   profile_costs,
   optimizer_exit_flags,
   optimal_params_matrix,
-  optimization_success
+  optimization_success,
+  nested_cluster = NULL
 )
 }
 \arguments{

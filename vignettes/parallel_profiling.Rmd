@@ -1,0 +1,217 @@
+---
+title: "Likelihood Profiling in Parallel"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Likelihood Profiling in Parallel}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Overview
+
+This vignette demonstrates the parallel computation capabilities of the `likelyprofiler` package. For background on profile likelihood theory and the mathematical formulation, please refer to the "Profile Likelihood for a Gaussian Mixture Model" vignette. Here we focus on three parallelization strategies:
+
+1. **Parameter-level parallelization**: Computing profiles for different parameters in parallel
+2. **DEoptim parallelization**: Using DEoptim's built-in parallel capabilities  
+3. **Nested parallelization**: Combining both approaches for maximum performance
+
+We'll use the same correlated Gaussian mixture model to demonstrate performance gains from each approach.
+
+## Problem Setup
+
+First, let's set up the same correlated Gaussian mixture model from the basic vignette:
+
+```{r problem_setup}
+library(likelyprofiler)
+
+# Problem parameters
+gamma = 8   # concentration parameter
+d = 5       # dimensionality
+
+# Define covariance matrices to introduce correlations
+Sigma1 = diag(d)
+Sigma1[1, 2] = Sigma1[2, 1] = 0.5
+
+# Pre-compute Cholesky decomposition of inverse covariance matrices
+chol_sigma1_inv = chol(solve(Sigma1))
+chol_sigma2_inv = chol_sigma1_inv  # Use the same covariance for both components
+
+# Define the Gaussian mixture negative log-likelihood
+mlogf = function(x, gamma, chol_sigma1_inv, chol_sigma2_inv){
+  m1 = m2 = rep(0, length(x))
+  m1[1] = 1
+  m1[2] = 1
+  diff1 = x - m1
+  diff2 = x - m2
+  - log(exp(- gamma * crossprod(chol_sigma1_inv %*% diff1)) + 
+        exp(- gamma * crossprod(chol_sigma2_inv %*% diff2)))
+}
+
+# True and optimized parameters
+true_params = c(1, 1, rep(0, d-2))
+set.seed(23)
+optimized_params = true_params + rnorm(length(true_params), sd = 0.05)
+names(true_params) = names(optimized_params) = paste0("param_", 1:d)
+
+# Bounds for the parameters
+bounds = list(lower = rep(-2, d), upper = rep(2, d))
+
+# Use smaller grid for faster demonstration
+profile_options = list(
+  grid_method = "adaptive",
+  grid_points = 50,  # Reduced for faster execution
+  max_grid_range_multiplier = 1.5
+)
+```
+
+## Sequential Computation (Baseline)
+
+First, let's establish a baseline with sequential computation:
+
+```{r sequential}
+# Sequential computation for timing comparison
+system.time({
+  result_sequential = computeLikelihoodProfiles(
+    params_current = optimized_params,
+    negLogLikelihood = mlogf,
+    bounds = bounds,
+    profile_options = profile_options,
+    optimizer = "optim",
+    verbose = FALSE,
+    gamma = gamma,
+    chol_sigma1_inv = chol_sigma1_inv,
+    chol_sigma2_inv = chol_sigma2_inv
+  )
+})
+
+print(result_sequential$summary)
+```
+
+## Parameter-Level Parallelization
+
+The most straightforward parallelization approach is to compute profiles for different parameters simultaneously:
+
+```{r param_parallel}
+# Create a cluster for parameter-level parallelization
+cluster = parallel::makeCluster(2)
+
+# Compute profiles in parallel across parameters
+system.time({
+  result_param_parallel = computeLikelihoodProfiles(
+    params_current = optimized_params,
+    negLogLikelihood = mlogf,
+    bounds = bounds,
+    profile_options = profile_options,
+    optimizer = "optim",
+    cluster = cluster,
+    verbose = FALSE,
+    gamma = gamma,
+    chol_sigma1_inv = chol_sigma1_inv,
+    chol_sigma2_inv = chol_sigma2_inv
+  )
+})
+
+print(result_param_parallel$summary)
+
+# Stop the cluster
+parallel::stopCluster(cluster)
+```
+
+## DEoptim with Parallel Function Evaluation
+
+For more complex optimization problems, DEoptim can provide better results. DEoptim also supports parallel evaluation of the objective function:
+
+```{r deoptim_parallel}
+# Create cluster for DEoptim parallelization
+cluster_deoptim = parallel::makeCluster(2)
+
+# Use DEoptim with parallel function evaluation
+system.time({
+  result_deoptim_parallel = computeLikelihoodProfiles(
+    params_current = optimized_params,
+    negLogLikelihood = mlogf,
+    bounds = bounds,
+    profile_options = profile_options,
+    optimizer = "deoptim",
+    optim_options = list(
+      itermax = 50,      # Reduced for faster demo
+      NP = 50,           # Population size
+      trace = FALSE,
+      cluster = cluster_deoptim  # DEoptim's parallel evaluation
+    ),
+    verbose = FALSE,
+    gamma = gamma,
+    chol_sigma1_inv = chol_sigma1_inv,
+    chol_sigma2_inv = chol_sigma2_inv
+  )
+})
+
+print(result_deoptim_parallel$summary)
+
+# Stop the cluster
+parallel::stopCluster(cluster_deoptim)
+```
+
+## Nested Parallelization
+
+For maximum performance on multi-core systems, we can combine both approaches using nested parallelization:
+
+```{r nested_parallel, eval=FALSE}
+# Create outer cluster for parameter-level parallelization
+outer_cluster = parallel::makeCluster(2)
+
+# Define nested cluster creation expression
+# This will be evaluated on each worker to create inner clusters
+nested_cluster_expr = quote({
+  nested_cluster = parallel::makeCluster(2)
+})
+
+# Nested parallelization: parameters in parallel + DEoptim in parallel
+system.time({
+  result_nested_parallel = computeLikelihoodProfiles(
+    params_current = optimized_params,
+    negLogLikelihood = mlogf,
+    bounds = bounds,
+    profile_options = profile_options,
+    optimizer = "deoptim",
+    optim_options = list(
+      itermax = 50,
+      NP = 20,
+      trace = FALSE
+    ),
+    cluster = outer_cluster,
+    nested_cluster_call = nested_cluster_expr,
+    verbose = FALSE,
+    gamma = gamma,
+    chol_sigma1_inv = chol_sigma1_inv,
+    chol_sigma2_inv = chol_sigma2_inv
+  )
+})
+
+print(result_nested_parallel$summary)
+
+# Stop the outer cluster
+parallel::stopCluster(outer_cluster)
+```
+
+## Conclusion
+
+The `likelyprofiler` package offers flexible parallelization options to significantly speed up profile likelihood computation:
+
+- **Parameter-level parallelization** is the easiest to implement and provides good speedup for most problems
+- **DEoptim parallelization** is beneficial when likelihood evaluation is expensive  
+- **Nested parallelization** can provide maximum performance but requires careful resource management
+
+Choose the approach that best matches your problem characteristics and available computational resources. Always monitor resource usage to avoid assigning more cores than available, which can actually slow down computation.

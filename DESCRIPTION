@@ -18,6 +18,7 @@ Suggests:
     rmarkdown,
     knitr,
     testthat (>= 3.0.0),
-	DEoptim,
+    DEoptim,
+    lhs
 VignetteBuilder: knitr
 Config/testthat/edition: 3

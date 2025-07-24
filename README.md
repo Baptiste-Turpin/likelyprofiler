@@ -39,19 +39,19 @@ vignette("gaussian_mixture_profiling", package = "likelyprofiler")
 Basic usage example:
 ```R
 # Define a simple quadratic likelihood function
-quadratic_likelihood <- function(params) {
-  x <- params[1]
-  y <- params[2]
+quadratic_likelihood = function(params) {
+  x = params[1]
+  y = params[2]
   (x - 2)^2 + 2 * (y - 1)^2
 }
 
 # Set up the problem
-true_params <- c(2.0, 1.0)
-names(true_params) <- c("param_x", "param_y")
-bounds <- list(lower = c(0, 0), upper = c(4, 3))
+true_params = c(2.0, 1.0)
+names(true_params) = c("param_x", "param_y")
+bounds = list(lower = c(0, 0), upper = c(4, 3))
 
 # Compute profile likelihood
-result <- computeLikelihoodProfiles(
+result = computeLikelihoodProfiles(
   params_current = true_params,
   negLogLikelihood = quadratic_likelihood,
   bounds = bounds,

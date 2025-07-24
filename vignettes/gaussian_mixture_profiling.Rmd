@@ -39,35 +39,48 @@ where $\hat{\theta}$ is the maximum likelihood estimate. Under regularity condit
 
 ## Test Case: Gaussian Mixture Model
 
-This vignette demonstrates profile likelihood computation for a simple optimization problem: a **two-component Gaussian mixture model** with fixed, well-separated means. The model is defined by the negative log-likelihood:
+This vignette demonstrates profile likelihood computation for a **two-component Gaussian mixture model** with correlated parameters. The model is defined by the negative log-likelihood:
 
-$$-\log L(x; \gamma) = -\log\left[\exp\left(-\gamma \|x - m_1\|^2\right) + \exp\left(-\gamma \|x - m_2\|^2\right)\right]$$
+$$-\log L(x; \gamma) = -\log\left[\exp\left(-\gamma (x - m_1)^T \Sigma_1^{-1} (x - m_1)\right) + \exp\left(-\gamma (x - m_2)^T \Sigma_2^{-1} (x - m_2)\right)\right]$$
 
 where:
 
 - $x \in \mathbb{R}^d$ is the parameter vector of interest (in our case, $d = 5$)
 - $\gamma > 0$ is the concentration parameter (higher values create sharper peaks)
-- $m_1 = (1, 0, 0, 0, 0)^T$ and $m_2 = (0, 0, 0, 0, 0)^T$ are the fixed mixture centers
+- $m_1 = (1, 1, 0, 0, 0)^T$ and $m_2 = (0, 0, 0, 0, 0)^T$ are the fixed mixture centers
+- $\Sigma_1, \Sigma_2$ are covariance matrices that introduce correlations between parameters
 
 We define this negative log-likelihood function in R as follows:
 ```{r}
-# Define the Gaussian mixture negative log-likelihood
-mlogf = function(x, gamma){
-  m1 = m2 = rep(0, length(x))
-  m1[1] = 1
-  m2[1] = 0
-  - log(exp(- gamma * (sum((x-m1)^2))) + exp(- gamma * (sum((x-m2)^2))))
-}
-
 # Problem parameters
 gamma = 8   # concentration parameter
 d = 5       # dimensionality
+
+# Define covariance matrices to introduce correlations
+Sigma1 = diag(d)
+Sigma1[1, 2] = Sigma1[2, 1] = 0.5
+
+# Pre-compute Cholesky decomposition of inverse covariance matrices
+chol_sigma1_inv = chol(solve(Sigma1))
+chol_sigma2_inv = chol_sigma1_inv  # Use the same covariance for both components
+
+# Define the Gaussian mixture negative log-likelihood
+mlogf = function(x, gamma, chol_sigma1_inv, chol_sigma2_inv){
+  m1 = m2 = rep(0, length(x))
+  m1[1] = 1
+  m1[2] = 1
+  diff1 = x - m1
+  diff2 = x - m2
+  - log(exp(- gamma * crossprod(chol_sigma1_inv %*% diff1)) + 
+        exp(- gamma * crossprod(chol_sigma2_inv %*% diff2)))
+}
+
 ```
 
 For this example, let us define the true parameters as known, and some dummy optimized parameters as if we obtained them from an optimization routine.
 
 ```{r}
-true_params = c(1, rep(0, d-1))
+true_params = c(1, 1, rep(0, d-2))
 # Define optimized parameters, slightly away from the true values
 set.seed(23)
 optimized_params = true_params + rnorm(length(true_params), sd = 0.05)
@@ -87,7 +100,9 @@ result = computeLikelihoodProfiles(
   params_current = optimized_params,
   negLogLikelihood = mlogf,
   bounds = bounds,
-  gamma = gamma
+  gamma = gamma,
+  chol_sigma1_inv = chol_sigma1_inv,
+  chol_sigma2_inv = chol_sigma2_inv
 )
 
 ```
@@ -104,8 +119,7 @@ Finally, we can visualize the profile likelihood using the `plotLikelihoodProfil
 ```{r}
 # Plot the profile likelihood
 plotLikelihoodProfiles(result,
-                       true_values = true_params
-)
+                       true_values = true_params)
 ```
 
 ## Parallel Computation
@@ -122,6 +136,8 @@ result_parallel = computeLikelihoodProfiles(
   negLogLikelihood = mlogf,
   bounds = bounds,
   gamma = gamma,
+  chol_sigma1_inv = chol_sigma1_inv,
+  chol_sigma2_inv = chol_sigma2_inv,
   cluster = cluster
 )
 

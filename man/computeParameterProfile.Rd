@@ -12,6 +12,7 @@ computeParameterProfile(
   profile_options,
   optimizer_info,
   likelihood_args = list(),
+  nested_cluster_call = NULL,
   verbose = FALSE
 )
 }

@@ -8,6 +8,7 @@
 \description{
 Compute profile likelihood confidence intervals for parameters using
 grid-based optimization with customizable methods and parallel computation support.
+Get started quickly by checking vignette \code{vignette("gaussian_mixture_profiling", package = "likelyprofiler")}.
 }
 \details{
 Profile likelihood is a robust method for uncertainty quantification that

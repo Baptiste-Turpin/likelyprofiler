@@ -13,25 +13,36 @@ computeLikelihoodProfiles(
   optim_options = list(),
   verbose = TRUE,
   cluster = NULL,
+  nested_cluster_call = NULL,
   ...
 )
 }
 \arguments{
 \item{params_current}{Numeric vector of parameters at optimum}
 
-\item{negLogLikelihood}{Function that takes parameter vector and returns scalar cost}
+\item{negLogLikelihood}{Function that takes parameter vector and returns
+scalar cost}
 
-\item{bounds}{List with elements 'lower' and 'upper' containing parameter bounds}
+\item{bounds}{List with elements 'lower' and 'upper' containing parameter
+bounds}
 
 \item{profile_options}{List of profiling options (see Details)}
 
-\item{optimizer}{Character string or function specifying optimizer (default: "optim")}
+\item{optimizer}{Character string or function specifying optimizer (default:
+"optim")}
 
 \item{optim_options}{List of optimizer-specific arguments (default: list())}
 
 \item{verbose}{Logical indicating whether to print progress messages}
 
-\item{cluster}{Optional cluster object for parallel computation (default: NULL)}
+\item{cluster}{Optional cluster object for parallel computation (default:
+NULL)}
+
+\item{nested_cluster_call}{Optional expression to create a nested cluster
+for DEoptim parallel computation within each parameter profile (default: NULL).
+Only used when optimizer is "deoptim". The expression should create an object
+named \code{nested_cluster} when evaluated. This enables nested parallelization:
+outer parallelization across parameters, inner parallelization within \code{\link[DEoptim]{DEoptim}}.}
 
 \item{...}{Additional arguments passed to the \code{negLogLikelihood} function}
 }
@@ -44,15 +55,24 @@ List containing:
 }
 }
 \description{
-Compute profile likelihood confidence intervals for all parameters in parallel
-using a grid-based approach with customizable optimization methods.
+Compute profile likelihood confidence intervals for all parameters in
+parallel using a grid-based approach with customizable optimization methods.
 }
 \details{
 The \code{profile_options} list can contain:
 \itemize{
-\item \code{grid_method}: "uniform" or "adaptive" (default: "uniform")
-\item \code{grid_points}: Number of grid points per parameter (default: 25)
-\item \code{max_grid_range_multiplier}: Grid range multiplier (default: 2.0)
+\item \code{grid_method}: "uniform" or "adaptive" (default: "adaptive").
+"uniform" uses evenly spaced grid points, "adaptive" adjusts the density of grid points
+to be more dense near the optimum using a quadratic spacing.
+\item \code{grid_points}: Number of grid points per parameter (default: 100)
+\item \code{max_grid_range_multiplier}: Controls the width of the profiling grid as a
+fraction of the total parameter range defined by bounds. The grid is centered around
+the current parameter value and extends max_range/2 in each direction, where
+max_range = max_grid_range_multiplier * (upper_bound - lower_bound). A value of 1.0
+covers the full parameter range for a parameter in the center of the range,
+while 2.0 (default) attempts to cover twice the
+range but is constrained by the bounds, this ensures that the whole range is covered even if the
+parameter is near the boundary.
 \item \code{ll_ratio_threshold}: Likelihood ratio threshold for CI (default: 3.84)
 }
 
@@ -66,11 +86,33 @@ The \code{optimizer} can be:
 The \code{optim_options} list can contain optimizer-specific arguments:
 \itemize{
 \item For optim: \code{method}, \code{control}, etc.
-\item For deoptim: \code{itermax}, \code{NP}, \code{trace}, etc. Default values are: itermax = 100, trace = FALSE.
+\item For deoptim: \code{itermax}, \code{NP}, \code{trace}, etc. Default values are: \verb{itermax = 100, trace = FALSE}.
 Other values are the defaults set by \code{\link[DEoptim]{DEoptim.control}}.
 \item For custom optimizers: any arguments the optimizer function accepts
 }
 }
+\section{Nested Parallel Computation}{
+
+For DEoptim optimization, nested parallelization can be enabled using the
+\code{nested_cluster_call} parameter. This allows:
+\itemize{
+\item Outer parallelization: Multiple parameter profiles computed in parallel using \code{cluster}
+\item Inner parallelization: DEoptim uses parallel computation within each profile using a nested cluster
+}
+
+The \code{nested_cluster_call} should be an expression (e.g., created with \code{quote()}) that,
+when evaluated, creates an object named \code{nested_cluster}. For example:
+\code{nested_cluster_call = quote({nested_cluster = parallel::makeCluster(2)
+                                   parallel::clusterEvalQ(nested_cluster, library(some_package))
+                                  })}.
+
+The object \code{nested_cluster} will be passed to \code{\link[DEoptim]{DEoptim.control}} as the \code{cluster} argument.
+
+\strong{Important:} Ensure the nested cluster uses fewer cores than available to avoid
+resource conflicts with the outer cluster. The nested cluster is automatically passed
+to DEoptim's cluster parameter for parallel function evaluations.
+}
+
 \examples{
 # Basic example with simple quadratic function
 

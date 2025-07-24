@@ -15,6 +15,11 @@
 #' @param verbose Logical indicating whether to print progress messages
 #' @param cluster Optional cluster object for parallel computation (default:
 #'   NULL)
+#' @param nested_cluster_call Optional expression to create a nested cluster
+#'   for DEoptim parallel computation within each parameter profile (default: NULL).
+#'   Only used when optimizer is "deoptim". The expression should create an object 
+#'   named `nested_cluster` when evaluated. This enables nested parallelization:
+#'   outer parallelization across parameters, inner parallelization within \code{\link[DEoptim]{DEoptim}}.
 #' @param ... Additional arguments passed to the `negLogLikelihood` function
 #'
 #' @details The \code{profile_options} list can contain:
@@ -48,6 +53,26 @@
 #'     Other values are the defaults set by \code{\link[DEoptim]{DEoptim.control}}.
 #'   \item For custom optimizers: any arguments the optimizer function accepts
 #' }
+#'
+#' @section Nested Parallel Computation:
+#' For DEoptim optimization, nested parallelization can be enabled using the 
+#' \code{nested_cluster_call} parameter. This allows:
+#' \itemize{
+#'   \item Outer parallelization: Multiple parameter profiles computed in parallel using \code{cluster}
+#'   \item Inner parallelization: DEoptim uses parallel computation within each profile using a nested cluster
+#' }
+#' 
+#' The \code{nested_cluster_call} should be an expression (e.g., created with \code{quote()}) that,
+#' when evaluated, creates an object named \code{nested_cluster}. For example:
+#' \code{nested_cluster_call = quote({nested_cluster = parallel::makeCluster(2)
+#'                                    parallel::clusterEvalQ(nested_cluster, library(some_package))
+#'                                   })}.
+#'
+#' The object `nested_cluster` will be passed to \code{\link[DEoptim]{DEoptim.control}} as the \code{cluster} argument.
+#'
+#' \strong{Important:} Ensure the nested cluster uses fewer cores than available to avoid
+#' resource conflicts with the outer cluster. The nested cluster is automatically passed
+#' to DEoptim's cluster parameter for parallel function evaluations.
 #'
 #' @return List containing:
 #' \itemize{
@@ -132,6 +157,7 @@ computeLikelihoodProfiles = function(params_current,
                                      optim_options = list(),
                                      verbose = TRUE,
                                      cluster = NULL,
+                                     nested_cluster_call = NULL,
                                      ...) {
 
   # Validate inputs
@@ -207,13 +233,6 @@ computeLikelihoodProfiles = function(params_current,
 
   # Compute profiles for all parameters
   if (!is.null(cluster)) {
-    # Load required packages on cluster
-    parallel::clusterEvalQ(cluster, {
-      if (exists("optimizer_info") && optimizer_info$name == "deoptim") {
-        library(DEoptim)
-      }
-    })
-
     # Run profiling in parallel
     results = parallel::parLapply(cluster, 1:n_params, function(i) {
       computeParameterProfile(
@@ -224,6 +243,7 @@ computeLikelihoodProfiles = function(params_current,
         profile_options = profile_options,
         optimizer_info = optimizer_info,
         likelihood_args = likelihood_args,
+        nested_cluster_call = nested_cluster_call,
         verbose = FALSE  # Silent in parallel
       )
     })
@@ -338,11 +358,13 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
     } else if (optimizer == "deoptim") {
       # Check if DEoptim is available
       if (!requireNamespace("DEoptim", quietly = TRUE)) {
-        stop("Error in validateAndSetupOptimizer: DEoptim package required but not available. Install with: install.packages('DEoptim')")
+        stop("Error in validateAndSetupOptimizer: DEoptim package required for 'deoptim' method but not available. Install with: install.packages('DEoptim')")
+      }
+      if (!requireNamespace("lhs", quietly = TRUE)) {
+        stop("Error in validateAndSetupOptimizer: lhs package required for 'deoptim' method but not available. Install with: install.packages('lhs')")
       }
       default_optim_options = list(itermax = 100, trace = FALSE)
       optim_options = utils::modifyList(default_optim_options, optim_options)
-      optim_options = do.call(DEoptim::DEoptim.control, optim_options)
       return(list(
         name = "deoptim",
         type = "builtin",
@@ -448,7 +470,7 @@ validateProfileOptions = function(profile_options) {
 optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_start_params,
                                  negLogLikelihood, bounds, optimizer_info, likelihood_args,
                                  profile_costs, optimizer_exit_flags, optimal_params_matrix,
-                                 optimization_success) {
+                                 optimization_success, nested_cluster = NULL) {
 
   current_warm_start = warm_start_params
   success_count = 0
@@ -466,7 +488,8 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
         negLogLikelihood = negLogLikelihood,
         bounds = bounds,
         optimizer_info = optimizer_info,
-        likelihood_args = likelihood_args
+        likelihood_args = likelihood_args,
+        nested_cluster = nested_cluster
       )
 
       profile_costs[j] = result$cost
@@ -518,7 +541,21 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
 #' @keywords internal
 computeParameterProfile = function(param_index, params_current, negLogLikelihood,
                                    bounds, profile_options, optimizer_info,
-                                   likelihood_args = list(), verbose = FALSE) {
+                                   likelihood_args = list(), 
+                                   nested_cluster_call = NULL,
+                                   verbose = FALSE) {
+
+  if (!is.null(nested_cluster_call) && optimizer_info$name == "deoptim") {
+    # Evaluate the expression 'nested_cluster_call' 
+    # It defines the object `nested_cluster`
+    tryCatch({
+      eval(nested_cluster_call)
+    }, error = function(e) {
+      stop(sprintf("Error in computeParameterProfile: Failed to evaluate nested_cluster_call: %s", e$message))
+    })
+  } else{
+    nested_cluster = NULL
+  }
 
   tryCatch({
     # Create grid for this parameter
@@ -578,7 +615,8 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
       profile_costs = profile_costs,
       optimizer_exit_flags = optimizer_exit_flags,
       optimal_params_matrix = optimal_params_matrix,
-      optimization_success = optimization_success
+      optimization_success = optimization_success,
+      nested_cluster = nested_cluster
     )
 
     # Update arrays with right side results
@@ -604,7 +642,8 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
         profile_costs = profile_costs,
         optimizer_exit_flags = optimizer_exit_flags,
         optimal_params_matrix = optimal_params_matrix,
-        optimization_success = optimization_success
+        optimization_success = optimization_success,
+        nested_cluster = nested_cluster
       )
 
       # Update arrays with left side results
@@ -787,7 +826,8 @@ createAdaptiveGrid = function(grid_lower, grid_upper, center_value, n_points) {
 #' @return List with optimized cost, exit flag, and optimal parameters
 #' @keywords internal
 optimizeConditional = function(param_index, fixed_value, warm_start_params,
-                               negLogLikelihood, bounds, optimizer_info, likelihood_args = list()) {
+                               negLogLikelihood, bounds, optimizer_info, likelihood_args = list(),
+                               nested_cluster = NULL) {
 
   # Create conditional cost function
   conditional_cost = function(free_params) {
@@ -828,10 +868,18 @@ optimizeConditional = function(param_index, fixed_value, warm_start_params,
 
     } else if (optimizer_info$name == "deoptim") {
 
+      optimizer_info$extra_args$initialpop = getInitPopOptim(optimizer_info$extra_args$initialpop,
+                                                             n_pop = optimizer_info$extra_args$NP,
+                                                             free_indices = free_indices,
+                                                             lower_free = lower_free,
+                                                             upper_free = upper_free,
+                                                             initial_free_params = initial_free_params)
+      optimizer_info$extra_args$cluster = nested_cluster  # Pass nested cluster if available
+      deoptim_control = do.call(DEoptim::DEoptim.control, optimizer_info$extra_args)
       result = DEoptim::DEoptim(fn = conditional_cost,
                                 lower = lower_free,
                                 upper = upper_free,
-                                control = optimizer_info$extra_args)
+                                control = deoptim_control)
 
       cost = result$optim$bestval
       exit_flag = "success"  # DEoptim doesn't provide convergence codes
@@ -1158,4 +1206,62 @@ createProfileSummary = function(profiles, confidence_intervals, params_current) 
   })
 
   return(summary_df)
+}
+
+#' Generate Initial Population for DEoptim using Latin Hypercube Sampling
+#'
+#' Creates an initial population matrix for DEoptim optimization using Latin hypercube
+#' sampling to ensure good coverage of the parameter space. Always includes the
+#' provided initial parameters as the first member of the population.
+#'
+#' @param initialpop Optional pre-existing initial population matrix. If provided,
+#'   this is returned unchanged after validation
+#' @param n_pop Population size (number of individuals in the population)
+#' @param free_indices Indices of free parameters being optimized
+#' @param lower_free Lower bounds for free parameters
+#' @param upper_free Upper bounds for free parameters
+#' @param initial_free_params Initial values for free parameters
+#' @return Matrix with n_pop rows and length(free_indices) columns containing
+#'   the initial population, with initial_free_params as the first row
+#' @keywords internal
+getInitPopOptim = function(initialpop, n_pop, free_indices, lower_free, upper_free, initial_free_params) {
+
+  # If initialpop is provided, validate and return it
+  if (!is.null(initialpop)) {
+    if (!is.matrix(initialpop)) {
+      stop("Error in getInitPopOptim: initialpop must be a matrix")
+    }
+
+    if (ncol(initialpop) != length(free_indices)) {
+      stop(sprintf("Error in getInitPopOptim: initialpop must have %d columns (one for each free parameter), got %d",
+                   length(free_indices), ncol(initialpop)))
+    }
+
+    # Validate bounds
+    if (any(t(initialpop) < lower_free) ||
+        any(t(initialpop) > upper_free)) {
+      stop("Error in getInitPopOptim: All values in initialpop must be within bounds [lower_free, upper_free]")
+    }
+
+    initialpop = rbind(initial_free_params, initialpop)
+    return(initialpop)
+  }
+
+  n_dim = length(free_indices)
+  if (is.null(n_pop)){
+    n_pop = 10 * n_dim
+  }
+  # Validate inputs
+  if (n_pop < 4) {
+    stop("Error in getInitPopOptim: n_pop must be at least 4 if provided")
+  }
+
+  # Generate Latin hypercube sample for remaining population members
+  n_lhs = n_pop - 1  # Reserve first spot for initial_free_params
+  lhs_sample = lhs::randomLHS(n_lhs, n_dim)
+  lhs_sample = t(lower_free + (upper_free - lower_free) * t(lhs_sample))
+
+  # Combine initial parameters with LHS sample
+  initialpop = rbind(initial_free_params, lhs_sample)
+  return(initialpop)
 }

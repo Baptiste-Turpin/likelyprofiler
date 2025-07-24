@@ -11,7 +11,8 @@ optimizeConditional(
   negLogLikelihood,
   bounds,
   optimizer_info,
-  likelihood_args = list()
+  likelihood_args = list(),
+  nested_cluster = NULL
 )
 }
 \arguments{
