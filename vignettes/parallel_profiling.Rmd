@@ -173,7 +173,7 @@ system.time({
     optimizer = "deoptim",
     optim_options = list(
       itermax = 20,      # Reduced for faster demo
-      NP = 50            # Population size
+      NP = 20            # Population size
     ),
     cluster = cluster_deoptim,
     verbose = FALSE,
@@ -200,7 +200,7 @@ system.time({
     optimizer = "deoptim",
     optim_options = list(
       itermax = 20,      # Reduced for faster demo
-      NP = 50,           # Population size
+      NP = 20,           # Population size
       cluster = cluster_deoptim
     ),
     verbose = FALSE,
@@ -222,6 +222,7 @@ In the case above, no or little time will be gained in that way as the likelihoo
 For maximum performance on multi-core systems and for computationally intensive likelihood functions, we can combine both approaches using nested parallelization:
 
 ```{r nested_parallel, eval=FALSE}
+## Not run:
 # Create outer cluster for parameter-level parallelization
 outer_cluster = parallel::makeCluster(2)
 
@@ -243,7 +244,7 @@ system.time({
     optimizer = "deoptim",
     optim_options = list(
       itermax = 20,
-      NP = 50
+      NP = 20
     ),
     cluster = outer_cluster,
     nested_cluster_call = nested_cluster_expr,

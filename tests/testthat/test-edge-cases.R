@@ -44,3 +44,36 @@ test_that("Edge cases are handled correctly", {
   expect_true(is.list(result_boundary_exact))
   expect_equal(length(result_boundary_exact$profiles), 2)
 })
+
+test_that("Grid too narrow warning is properly issued", {
+  setup = setup_gaussian_mixture(d = 2, gamma = 0.1)  # Very flat likelihood
+
+  # Capture warnings during profiling with small grid and flat likelihood
+  expect_warning(
+    {
+    result_narrow = computeLikelihoodProfiles(
+      params_current = setup$optimized_params,
+      negLogLikelihood = setup$mlogf,
+      bounds = setup$bounds,
+      profile_options = list(
+        grid_points = 5,  # Small grid
+        max_grid_range_multiplier = 0.1,  # Very narrow grid range
+        ll_ratio_threshold = 3.84
+      ),
+      verbose = TRUE,  # Enable warnings
+      gamma = setup$gamma
+    )},
+    "Grid too narrow to capture confidence interval bounds for parameter\\(s\\): .* Consider increasing max_grid_range_multiplier",
+    perl = TRUE
+  )
+
+  # Verify result structure is still valid
+  expect_true(is.list(result_narrow))
+  expect_true(all(c("profiles", "confidence_intervals", "summary") %in% names(result_narrow)))
+
+  # Check that exit flags are properly set
+  expect_true(all(sapply(result_narrow$profiles, function(p) isTRUE(p$exit_flags$grid_too_narrow))))
+
+  # Confidence intervals should still be returned (as grid bounds)
+  expect_true(all(!is.na(result_narrow$confidence_intervals)))
+})
