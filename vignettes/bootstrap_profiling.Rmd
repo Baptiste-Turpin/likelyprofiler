@@ -1,0 +1,199 @@
+---
+title: "Bootstrap Profile Likelihood Confidence Intervals"
+output: 
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{Bootstrap Profile Likelihood Confidence Intervals}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(likelyprofiler)
+set.seed(123)  # For reproducible results
+```
+
+## Bootstrap Threshold Method
+
+The bootstrap method provides data-driven thresholds for profile likelihood confidence intervals instead of relying on asymptotic chi-squared approximations. This is particularly useful when the asymptotic assumptions may not hold.
+
+## Example: Normal Distribution
+
+We'll use a simple normal distribution example where both methods should give similar results, demonstrating the bootstrap implementation.
+
+```{r}
+# Generate synthetic normal data
+n = 100
+true_mu = 2.5
+true_sigma = 1.2
+data_normal = rnorm(n, true_mu, true_sigma)
+
+# Set up bounds
+bounds = list(lower = c(-1, 0.1), upper = c(6, 4))
+
+# Define negative log-likelihood for normal distribution
+negLogLikNormal = function(params, data_normal) {
+  mu = params[1]
+  sigma = params[2]
+  if (sigma <= 0) return(1e10)  # Constraint: sigma > 0
+  -sum(dnorm(data_normal, mu, sigma, log = TRUE))
+}
+
+# Find ML estimates
+ml_result = optim(c(mean(data_normal), sd(data_normal)), negLogLikNormal, 
+                   data_normal = data_normal, method = "L-BFGS-B", 
+                   lower = bounds$lower, upper = bounds$upper)
+ml_params = ml_result$par
+names(ml_params) = c("mu", "sigma")
+```
+
+## Create Bootstrap Datasets
+
+Generate bootstrap datasets by resampling from the ML-fitted distribution:
+
+```{r}
+# Create bootstrap datasets
+n_bootstrap = 500
+bootstrap_datasets = vector("list", n_bootstrap)
+
+for (i in 1:n_bootstrap) {
+  # Resample data
+  boot_data = rnorm(n, ml_params["mu"], ml_params["sigma"]) #sample(data_normal, replace = TRUE)
+  
+  # Find ML estimates for bootstrap sample
+  boot_ml = optim(c(mean(boot_data), sd(boot_data)), negLogLikNormal, 
+                   data_normal = boot_data, method = "L-BFGS-B",
+                   lower = bounds$lower, upper = bounds$upper)
+  
+  # Create bootstrap dataset entry
+  boot_params = boot_ml$par
+  names(boot_params) = c("mu", "sigma")
+  bootstrap_datasets[[i]] = list(
+    optimal_cost = boot_ml$value,
+    optimal_params = boot_params,
+    negLogLikelihood = function(params) negLogLikNormal(params, boot_data)
+  )
+}
+
+# Check bootstrap parameter variation
+bootstrap_mu = sapply(bootstrap_datasets, function(x) x$optimal_params["mu"])
+bootstrap_sigma = sapply(bootstrap_datasets, function(x) x$optimal_params["sigma"])
+cat("Bootstrap parameter ranges:\n")
+cat(sprintf("mu: [%.4f, %.4f], sd = %.4f\n", 
+            min(bootstrap_mu), max(bootstrap_mu), sd(bootstrap_mu)))
+cat(sprintf("sigma: [%.4f, %.4f], sd = %.4f\n", 
+            min(bootstrap_sigma), max(bootstrap_sigma), sd(bootstrap_sigma)))
+```
+
+## Compare Fixed vs Bootstrap Methods
+
+```{r}
+# Fixed threshold method (traditional)
+result_fixed = computeLikelihoodProfiles(
+  params_current = ml_params,
+  negLogLikelihood = function(params) negLogLikNormal(params, data_normal),
+  bounds = bounds,
+  profile_options = list(
+    grid_points = 50,
+    threshold_method = "fixed",
+    ll_ratio_threshold = qchisq(0.95, 1)  # 95% CI
+  ),
+  verbose = FALSE
+)
+
+# Bootstrap threshold method
+result_bootstrap = computeLikelihoodProfiles(
+  params_current = ml_params,
+  negLogLikelihood = function(params) negLogLikNormal(params, data_normal),
+  bounds = bounds,
+  profile_options = list(
+    grid_points = 50,
+    threshold_method = "bootstrap",
+    bootstrap_conf_level = 0.95,
+    bootstrap_datasets = bootstrap_datasets
+  ),
+  verbose = FALSE
+)
+```
+
+## Plot results
+
+```{r}
+plotLikelihoodProfiles(result_fixed,
+                       true_values = c(true_mu, true_sigma),
+                       options = list(log_scale = FALSE))
+```
+
+Plot distributions statistics
+
+```{r}
+# result_bootstrap$bootstrap_stats has dim (n_boot, n_params, n_grid_values)
+hist(result_bootstrap$bootstrap_stats[,1,])
+
+matplot(seq_len(dim(result_bootstrap$bootstrap_stats)[3]), t(result_bootstrap$bootstrap_stats[,1,]), pch = 16)
+abline(h = 3.84)
+```
+
+
+
+## Results Comparison
+
+```{r}
+# Compare confidence intervals
+cat("Fixed threshold (chi-squared) confidence intervals:\n")
+print(result_fixed$confidence_intervals)
+
+cat("\nBootstrap confidence intervals:\n")
+print(result_bootstrap$confidence_intervals)
+
+cat("\nConfidence interval widths:\n")
+fixed_widths = result_fixed$confidence_intervals[,2] - result_fixed$confidence_intervals[,1]
+bootstrap_widths = result_bootstrap$confidence_intervals[,2] - result_bootstrap$confidence_intervals[,1]
+
+comparison = data.frame(
+  Parameter = rownames(result_fixed$confidence_intervals),
+  Fixed_Width = round(fixed_widths, 4),
+  Bootstrap_Width = round(bootstrap_widths, 4),
+  Ratio = round(bootstrap_widths / fixed_widths, 3)
+)
+print(comparison)
+```
+
+## Theoretical Comparison
+
+For the normal distribution case, both methods should give similar results since the likelihood ratio statistics follow the asymptotic chi-squared distribution quite well:
+
+```{r}
+# Compare with theoretical confidence intervals for normal distribution
+# Theoretical SE for mu: sigma/sqrt(n)
+# Theoretical SE for sigma: sigma/sqrt(2*n) (approximately)
+theoretical_se_mu = ml_params[2] / sqrt(n)
+theoretical_se_sigma = ml_params[2] / sqrt(2*n)
+
+# 95% theoretical CIs (using normal approximation)
+z_025 = qnorm(0.975)
+theoretical_ci_mu = ml_params[1] + c(-1, 1) * z_025 * theoretical_se_mu
+theoretical_ci_sigma = ml_params[2] + c(-1, 1) * z_025 * theoretical_se_sigma
+
+cat("Theoretical confidence intervals (normal approximation):\n")
+cat(sprintf("mu:    [%.4f, %.4f]\n", theoretical_ci_mu[1], theoretical_ci_mu[2]))
+cat(sprintf("sigma: [%.4f, %.4f]\n", theoretical_ci_sigma[1], theoretical_ci_sigma[2]))
+```
+
+## Summary
+
+The bootstrap method provides:
+- Data-driven thresholds that don't rely on asymptotic assumptions
+- More robust confidence intervals for complex likelihood surfaces
+- Similar results to chi-squared method when asymptotic conditions are met
+
+For this normal distribution example, both methods give very similar results, validating the bootstrap implementation while demonstrating its use for more complex scenarios where asymptotic assumptions may not hold.

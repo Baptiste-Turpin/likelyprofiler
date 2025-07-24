@@ -4,15 +4,21 @@
 \alias{extractConfidenceInterval}
 \title{Extract Confidence Interval from Profile}
 \usage{
-extractConfidenceInterval(profile_data, profile_options)
+extractConfidenceInterval(
+  profile_data,
+  profile_options,
+  bootstrap_thresholds = NULL
+)
 }
 \arguments{
 \item{profile_data}{Profile data structure}
 
 \item{profile_options}{Profiling options}
+
+\item{bootstrap_thresholds}{Optional bootstrap threshold statistics}
 }
 \value{
-Numeric vector \eqn{[lower, upper]} confidence bounds
+List with confidence_bounds and grid_too_narrow flag
 }
 \description{
 Extract Confidence Interval from Profile

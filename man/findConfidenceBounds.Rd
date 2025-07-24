@@ -8,7 +8,10 @@ findConfidenceBounds(
   grid_values,
   profile_costs,
   threshold_cost,
-  optimal_param_value
+  optimal_param_value,
+  bootstrap_stats = NULL,
+  param_index = NULL,
+  bootstrap_conf_level = NULL
 )
 }
 \arguments{
@@ -16,12 +19,18 @@ findConfidenceBounds(
 
 \item{profile_costs}{Profile cost values}
 
-\item{threshold_cost}{Threshold cost for confidence level}
+\item{threshold_cost}{Threshold cost for confidence level (ignored if bootstrap_stats provided)}
 
 \item{optimal_param_value}{Optimal parameter value from params_current}
+
+\item{bootstrap_stats}{Optional 3D array of bootstrap statistics \link{n_bootstrap, n_params, n_grid}}
+
+\item{param_index}{Parameter index (required if bootstrap_stats provided)}
+
+\item{bootstrap_conf_level}{Bootstrap confidence level (required if bootstrap_stats provided)}
 }
 \value{
-Numeric vector \eqn{[lower, upper]} confidence bounds
+List with confidence_bounds vector and grid_too_narrow flag
 }
 \description{
 Find Confidence Bounds by Interpolation

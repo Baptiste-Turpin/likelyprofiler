@@ -38,11 +38,12 @@ bounds}
 \item{cluster}{Optional cluster object for parallel computation (default:
 NULL)}
 
-\item{nested_cluster_call}{Optional expression to create a nested cluster
-for DEoptim parallel computation within each parameter profile (default: NULL).
-Only used when optimizer is "deoptim". The expression should create an object
-named \code{nested_cluster} when evaluated. This enables nested parallelization:
-outer parallelization across parameters, inner parallelization within \code{\link[DEoptim]{DEoptim}}.}
+\item{nested_cluster_call}{Optional expression to create a nested cluster for
+DEoptim parallel computation within each parameter profile (default: NULL).
+Only used when optimizer is \code{"deoptim"}. The expression should create an
+object named \code{nested_cluster} when evaluated. This enables nested
+parallelization: outer parallelization across parameters, inner
+parallelization within \code{\link[DEoptim]{DEoptim}}.}
 
 \item{...}{Additional arguments passed to the \code{negLogLikelihood} function}
 }
@@ -52,6 +53,10 @@ List containing:
 \item \code{profiles}: List of profile data for each parameter
 \item \code{confidence_intervals}: Matrix of \eqn{[lower, upper]} bounds for each parameter
 \item \code{summary}: Data frame summarizing results
+\item \code{options}: Profile options used in computation
+\item \code{optimizer}: Name of optimizer used
+\item \code{bootstrap_stats}: 3D array of bootstrap likelihood ratio statistics
+\eqn{[n_bootstrap, n_params, n_grid]} (only when \code{threshold_method = "bootstrap"})
 }
 }
 \description{
@@ -74,12 +79,19 @@ while 2.0 (default) attempts to cover twice the
 range but is constrained by the bounds, this ensures that the whole range is covered even if the
 parameter is near the boundary.
 \item \code{ll_ratio_threshold}: Likelihood ratio threshold for CI (default: 3.84)
+\item \code{threshold_method}: "fixed" or "bootstrap" (default: "fixed").
+When "fixed", uses \code{ll_ratio_threshold} directly. When "bootstrap",
+uses empirical thresholds from bootstrap datasets.
+\item \code{bootstrap_conf_level}: Confidence level for bootstrap thresholds (default: 0.95)
+\item \code{bootstrap_datasets}: Required when \code{threshold_method = "bootstrap"}.
+List of bootstrap datasets, each containing \code{optimal_cost} (scalar) and
+\code{negLogLikelihood} (function with same signature as main function).
 }
 
 The \code{optimizer} can be:
 \itemize{
-\item \code{"optim"}: Use base R optim() with options via optim_options
-\item \code{"deoptim"}: Use DEoptim package (must be installed)
+\item \code{"optim"}: Use base R \code{\link[stats]{optim}} with options via optim_options
+\item \code{"deoptim"}: Use \code{\link[DEoptim]{DEoptim}} (must be installed)
 \item A function with signature: function(fn, par, lower, upper, ...)
 }
 
@@ -92,25 +104,28 @@ Other values are the defaults set by \code{\link[DEoptim]{DEoptim.control}}.
 }
 }
 \section{Nested Parallel Computation}{
-
-For DEoptim optimization, nested parallelization can be enabled using the
-\code{nested_cluster_call} parameter. This allows:
+ For DEoptim optimization, nested
+parallelization can be enabled using the \code{nested_cluster_call}
+parameter. This allows:
 \itemize{
 \item Outer parallelization: Multiple parameter profiles computed in parallel using \code{cluster}
 \item Inner parallelization: DEoptim uses parallel computation within each profile using a nested cluster
 }
 
-The \code{nested_cluster_call} should be an expression (e.g., created with \code{quote()}) that,
-when evaluated, creates an object named \code{nested_cluster}. For example:
+The \code{nested_cluster_call} should be an expression (e.g., created with
+\code{quote()}) that, when evaluated, creates an object named
+\code{nested_cluster}. For example:
 \code{nested_cluster_call = quote({nested_cluster = parallel::makeCluster(2)
                                    parallel::clusterEvalQ(nested_cluster, library(some_package))
                                   })}.
 
-The object \code{nested_cluster} will be passed to \code{\link[DEoptim]{DEoptim.control}} as the \code{cluster} argument.
+The object \code{nested_cluster} will be passed to
+\code{\link[DEoptim]{DEoptim.control}} as the \code{cluster} argument.
 
-\strong{Important:} Ensure the nested cluster uses fewer cores than available to avoid
-resource conflicts with the outer cluster. The nested cluster is automatically passed
-to DEoptim's cluster parameter for parallel function evaluations.
+\strong{Important:} Ensure the nested cluster uses fewer cores than
+available to avoid resource conflicts with the outer cluster. The nested
+cluster is automatically passed to DEoptim's cluster parameter for parallel
+function evaluations.
 }
 
 \examples{
