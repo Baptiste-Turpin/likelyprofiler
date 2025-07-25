@@ -3,6 +3,7 @@
 #' Compute profile likelihood confidence intervals for parameters using 
 #' grid-based optimization with customizable methods and parallel computation support.
 #' Get started quickly by checking vignette \code{vignette("gaussian_mixture_profiling", package = "likelyprofiler")}.
+#' For bootstrap methods, see \code{vignette("bootstrap_profiling", package = "likelyprofiler")}.
 #'
 #' Profile likelihood is a robust method for uncertainty quantification that 
 #' provides confidence intervals for individual parameters by fixing each parameter 
@@ -14,6 +15,8 @@
 #' profile likelihood confidence intervals for all parameters of a given 
 #' likelihood function. The package supports multiple optimization algorithms 
 #' including base R's \code{\link[stats]{optim}}, \code{\link[DEoptim]{DEoptim}}, and custom user-defined optimizers.
+#' Additionally, bootstrap likelihood ratio tests provide data-driven confidence thresholds 
+#' as an alternative to asymptotic chi-squared approximations.
 #'
 #' @section Main Functions:
 #' * \code{\link{computeLikelihoodProfiles}}: Compute profile likelihood confidence 
@@ -24,6 +27,7 @@
 #'
 #' @section Key Features:
 #' * **Multiple optimizers**: Supports \code{\link[stats]{optim}}, \code{\link[DEoptim]{DEoptim}}, and custom optimization functions.
+#' * **Bootstrap thresholds**: Data-driven confidence thresholds using bootstrap likelihood ratio tests
 #' * **Grid methods**: Uniform and adaptive grid spacing for parameter exploration
 #' * **Parallel computation**: Optional cluster-based parallel execution for faster computation
 #' * **Robust validation**: Comprehensive input validation and error handling
@@ -37,6 +41,7 @@
 #' 4. Visualize results with \code{\link{plotLikelihoodProfiles}}
 #'
 #' For a complete example, see: \code{vignette("gaussian_mixture_profiling", package = "likelyprofiler")}
+#' For bootstrap methods, see: \code{vignette("bootstrap_profiling", package = "likelyprofiler")}
 #'
 #' @examples
 #' # Define a simple quadratic likelihood function

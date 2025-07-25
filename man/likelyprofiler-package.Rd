@@ -9,6 +9,7 @@
 Compute profile likelihood confidence intervals for parameters using
 grid-based optimization with customizable methods and parallel computation support.
 Get started quickly by checking vignette \code{vignette("gaussian_mixture_profiling", package = "likelyprofiler")}.
+For bootstrap methods, see \code{vignette("bootstrap_profiling", package = "likelyprofiler")}.
 }
 \details{
 Profile likelihood is a robust method for uncertainty quantification that
@@ -21,6 +22,8 @@ The main function is \code{\link{computeLikelihoodProfiles}}, which computes
 profile likelihood confidence intervals for all parameters of a given
 likelihood function. The package supports multiple optimization algorithms
 including base R's \code{\link[stats]{optim}}, \code{\link[DEoptim]{DEoptim}}, and custom user-defined optimizers.
+Additionally, bootstrap likelihood ratio tests provide data-driven confidence thresholds
+as an alternative to asymptotic chi-squared approximations.
 }
 \section{Main Functions}{
 
@@ -37,6 +40,7 @@ results to visualize confidence intervals and likelihood surfaces.
 
 \itemize{
 \item \strong{Multiple optimizers}: Supports \code{\link[stats]{optim}}, \code{\link[DEoptim]{DEoptim}}, and custom optimization functions.
+\item \strong{Bootstrap thresholds}: Data-driven confidence thresholds using bootstrap likelihood ratio tests
 \item \strong{Grid methods}: Uniform and adaptive grid spacing for parameter exploration
 \item \strong{Parallel computation}: Optional cluster-based parallel execution for faster computation
 \item \strong{Robust validation}: Comprehensive input validation and error handling
@@ -55,6 +59,7 @@ The typical workflow involves:
 }
 
 For a complete example, see: \code{vignette("gaussian_mixture_profiling", package = "likelyprofiler")}
+For bootstrap methods, see: \code{vignette("bootstrap_profiling", package = "likelyprofiler")}
 }
 
 \examples{

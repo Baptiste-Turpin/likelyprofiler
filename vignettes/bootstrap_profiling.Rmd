@@ -5,15 +5,17 @@ output:
     toc: true
     toc_depth: 2
 vignette: >
-%\VignetteIndexEntry{Bootstrap Profile Likelihood Confidence Intervals}
+  %\VignetteIndexEntry{Bootstrap Profile Likelihood Confidence Intervals}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
-  ---
+---
   
-  ```{r, include = FALSE}
+```{r, include = FALSE}
 knitr::opts_chunk$set(
-collapse = TRUE,
-comment = "#>"
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
 )
 ```
 
@@ -186,8 +188,8 @@ For the normal distribution case, both methods should give similar results since
 # Compare with theoretical confidence intervals for normal distribution
 # Theoretical SE for mu: sigma/sqrt(n)
 # Theoretical SE for sigma: sigma/sqrt(2*n) (approximately)
-theoretical_se_mu = ml_params[2] / sqrt(n)
-theoretical_se_sigma = ml_params[2] / sqrt(2*n)
+theoretical_se_mu = ml_params[2] / sqrt(n_data)
+theoretical_se_sigma = ml_params[2] / sqrt(2*n_data)
 
 # 95% theoretical CIs (using normal approximation)
 z_025 = qnorm(0.975)
