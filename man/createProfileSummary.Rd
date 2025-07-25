@@ -2,7 +2,7 @@
 % Please edit documentation in R/compute_parameter_profiles.R
 \name{createProfileSummary}
 \alias{createProfileSummary}
-\title{Create Profile Summary}
+\title{Create Profile Likelihood Summary Table}
 \usage{
 createProfileSummary(profiles, confidence_intervals, params_current)
 }
@@ -17,6 +17,7 @@ createProfileSummary(profiles, confidence_intervals, params_current)
 Data frame with summary statistics
 }
 \description{
-Create Profile Summary
+Creates a summary data frame with parameter names, current values,
+confidence intervals, and computation status for all profiled parameters.
 }
 \keyword{internal}

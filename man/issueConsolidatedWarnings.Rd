@@ -2,7 +2,7 @@
 % Please edit documentation in R/compute_parameter_profiles.R
 \name{issueConsolidatedWarnings}
 \alias{issueConsolidatedWarnings}
-\title{Issue Consolidated Warnings}
+\title{Issue Consolidated Warnings for Profile Results}
 \usage{
 issueConsolidatedWarnings(profiles, n_params)
 }
@@ -12,6 +12,7 @@ issueConsolidatedWarnings(profiles, n_params)
 \item{n_params}{Number of parameters}
 }
 \description{
-Issue Consolidated Warnings
+Analyzes profile results and issues consolidated warnings for common issues
+such as failed profiles, low success rates, and confidence interval problems.
 }
 \keyword{internal}

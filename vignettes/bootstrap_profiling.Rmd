@@ -41,57 +41,31 @@ data_normal = rnorm(n, true_mu, true_sigma)
 bounds = list(lower = c(-1, 0.1), upper = c(6, 4))
 
 # Define negative log-likelihood for normal distribution
-negLogLikNormal = function(params, data_normal) {
+negLogLikNormal = function(params, dataset = data_normal) {
   mu = params[1]
   sigma = params[2]
   if (sigma <= 0) return(1e10)  # Constraint: sigma > 0
-  -sum(dnorm(data_normal, mu, sigma, log = TRUE))
+  -sum(dnorm(dataset, mu, sigma, log = TRUE))
 }
 
 # Find ML estimates
 ml_result = optim(c(mean(data_normal), sd(data_normal)), negLogLikNormal, 
-                   data_normal = data_normal, method = "L-BFGS-B", 
+                   dataset = data_normal, method = "L-BFGS-B", 
                    lower = bounds$lower, upper = bounds$upper)
 ml_params = ml_result$par
 names(ml_params) = c("mu", "sigma")
 ```
 
-## Create Bootstrap Datasets
+## Create Bootstrap Data Generator
 
-Generate bootstrap datasets by resampling from the ML-fitted distribution:
+Define a function to generate bootstrap datasets from the fitted distribution:
 
 ```{r}
-# Create bootstrap datasets
-n_bootstrap = 500
-bootstrap_datasets = vector("list", n_bootstrap)
-
-for (i in 1:n_bootstrap) {
-  # Resample data
-  boot_data = rnorm(n, ml_params["mu"], ml_params["sigma"]) #sample(data_normal, replace = TRUE)
-  
-  # Find ML estimates for bootstrap sample
-  boot_ml = optim(c(mean(boot_data), sd(boot_data)), negLogLikNormal, 
-                   data_normal = boot_data, method = "L-BFGS-B",
-                   lower = bounds$lower, upper = bounds$upper)
-  
-  # Create bootstrap dataset entry
-  boot_params = boot_ml$par
-  names(boot_params) = c("mu", "sigma")
-  bootstrap_datasets[[i]] = list(
-    optimal_cost = boot_ml$value,
-    optimal_params = boot_params,
-    negLogLikelihood = function(params) negLogLikNormal(params, boot_data)
-  )
+# Create bootstrap data generation function
+generateData = function(params) {
+  # Generate new dataset from current parameter estimates
+  rnorm(n, params[1], params[2])
 }
-
-# Check bootstrap parameter variation
-bootstrap_mu = sapply(bootstrap_datasets, function(x) x$optimal_params["mu"])
-bootstrap_sigma = sapply(bootstrap_datasets, function(x) x$optimal_params["sigma"])
-cat("Bootstrap parameter ranges:\n")
-cat(sprintf("mu: [%.4f, %.4f], sd = %.4f\n", 
-            min(bootstrap_mu), max(bootstrap_mu), sd(bootstrap_mu)))
-cat(sprintf("sigma: [%.4f, %.4f], sd = %.4f\n", 
-            min(bootstrap_sigma), max(bootstrap_sigma), sd(bootstrap_sigma)))
 ```
 
 ## Compare Fixed vs Bootstrap Methods
@@ -100,27 +74,30 @@ cat(sprintf("sigma: [%.4f, %.4f], sd = %.4f\n",
 # Fixed threshold method (traditional)
 result_fixed = computeLikelihoodProfiles(
   params_current = ml_params,
-  negLogLikelihood = function(params) negLogLikNormal(params, data_normal),
+  negLogLikelihood = negLogLikNormal,
   bounds = bounds,
   profile_options = list(
     grid_points = 50,
     threshold_method = "fixed",
     ll_ratio_threshold = qchisq(0.95, 1)  # 95% CI
   ),
+  dataset = data_normal,
   verbose = FALSE
 )
 
 # Bootstrap threshold method
 result_bootstrap = computeLikelihoodProfiles(
   params_current = ml_params,
-  negLogLikelihood = function(params) negLogLikNormal(params, data_normal),
+  negLogLikelihood = negLogLikNormal,
   bounds = bounds,
   profile_options = list(
     grid_points = 50,
     threshold_method = "bootstrap",
     bootstrap_conf_level = 0.95,
-    bootstrap_datasets = bootstrap_datasets
+    n_bootstrap = 500
   ),
+  generateData = generateData,
+  dataset = data_normal,
   verbose = FALSE
 )
 ```
@@ -133,14 +110,30 @@ plotLikelihoodProfiles(result_fixed,
                        options = list(log_scale = FALSE))
 ```
 
-Plot distributions statistics
+Plot bootstrap LRT statistics:
 
 ```{r}
-# result_bootstrap$bootstrap_stats has dim (n_boot, n_params, n_grid_values)
-hist(result_bootstrap$bootstrap_stats[,1,])
-
-matplot(seq_len(dim(result_bootstrap$bootstrap_stats)[3]), t(result_bootstrap$bootstrap_stats[,1,]), pch = 16)
-abline(h = 3.84)
+# result_bootstrap$bootstrap_stats has dim (n_bootstrap, n_params, n_grid)
+if (!is.null(result_bootstrap$bootstrap_stats)) {
+  # Plot histogram of LRT statistics for first parameter at grid midpoint
+  midpoint_idx = ceiling(dim(result_bootstrap$bootstrap_stats)[3] / 2)
+  bootstrap_stats_to_plot = result_bootstrap$bootstrap_stats[, 1, midpoint_idx]
+  q95_observed = quantile(bootstrap_stats_to_plot, probs = 0.95)
+  hist(bootstrap_stats_to_plot, 
+       main = "Bootstrap LRT Statistics (Parameter 1, Grid Midpoint)",
+       xlab = "LRT Statistic", breaks = 30)
+  abline(v = qchisq(0.95, 1), col = "red", lty = 2, lwd = 2)
+  abline(v = q95_observed, col = "blue", lty = 2, lwd = 2)
+  legend("topright", c("Chi-squared(1, 0.95)", "Observed 95% quantile"), col = c("red", "blue"), lty = 2)
+  
+  # Plot LRT statistics across grid for first parameter  
+  matplot(seq_len(dim(result_bootstrap$bootstrap_stats)[3]), 
+          t(result_bootstrap$bootstrap_stats[1:20, 1, ]), 
+          type = "p", pch = 16, cex = 0.5,
+          main = "Bootstrap LRT Statistics Across Grid (Parameter 1)",
+          xlab = "Grid Point", ylab = "LRT Statistic")
+  abline(h = qchisq(0.95, 1), col = "red", lty = 2, lwd = 2)
+}
 ```
 
 

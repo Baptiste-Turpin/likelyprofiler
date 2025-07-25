@@ -29,6 +29,8 @@ optimizeConditional(
 \item{optimizer_info}{Optimizer configuration}
 
 \item{likelihood_args}{List of arguments to pass to negLogLikelihood function}
+
+\item{nested_cluster}{Optional cluster object for nested parallel computation}
 }
 \value{
 List with optimized cost, exit flag, and optimal parameters

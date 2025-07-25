@@ -30,6 +30,7 @@ evaluateConditionalCost(
 Scalar cost value
 }
 \description{
-Evaluate Conditional Cost Function
+Evaluates the cost function with one parameter fixed at a specified value.
+Reconstructs the full parameter vector and calls the original likelihood function.
 }
 \keyword{internal}

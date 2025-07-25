@@ -13,8 +13,8 @@ computeParameterProfile(
   optimizer_info,
   likelihood_args = list(),
   nested_cluster_call = NULL,
-  bootstrap_thresholds = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  generateData = NULL
 )
 }
 \arguments{
@@ -32,9 +32,11 @@ computeParameterProfile(
 
 \item{likelihood_args}{List of arguments to pass to negLogLikelihood function}
 
-\item{bootstrap_thresholds}{Optional bootstrap threshold statistics}
+\item{nested_cluster_call}{Expression to create nested cluster for DEoptim}
 
 \item{verbose}{Logical for verbose output}
+
+\item{generateData}{Function to generate bootstrap datasets}
 }
 \value{
 List with profile data and confidence interval

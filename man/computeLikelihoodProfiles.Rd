@@ -14,6 +14,7 @@ computeLikelihoodProfiles(
   verbose = TRUE,
   cluster = NULL,
   nested_cluster_call = NULL,
+  generateData = NULL,
   ...
 )
 }
@@ -44,6 +45,10 @@ Only used when optimizer is \code{"deoptim"}. The expression should create an
 object named \code{nested_cluster} when evaluated. This enables nested
 parallelization: outer parallelization across parameters, inner
 parallelization within \code{\link[DEoptim]{DEoptim}}.}
+
+\item{generateData}{Function to generate bootstrap datasets. Required when threshold_method is "bootstrap".
+Should take a parameter vector and return a dataset that can be passed to negLogLikelihood.
+The function signature should be: function(params) { ... return(dataset) }}
 
 \item{...}{Additional arguments passed to the \code{negLogLikelihood} function}
 }
@@ -83,9 +88,8 @@ parameter is near the boundary.
 When "fixed", uses \code{ll_ratio_threshold} directly. When "bootstrap",
 uses empirical thresholds from bootstrap datasets.
 \item \code{bootstrap_conf_level}: Confidence level for bootstrap thresholds (default: 0.95)
-\item \code{bootstrap_datasets}: Required when \code{threshold_method = "bootstrap"}.
-List of bootstrap datasets, each containing \code{optimal_cost} (scalar) and
-\code{negLogLikelihood} (function with same signature as main function).
+\item \code{n_bootstrap}: Number of bootstrap samples for empirical threshold computation (default: 500)
+
 }
 
 The \code{optimizer} can be:

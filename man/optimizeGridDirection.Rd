@@ -13,11 +13,15 @@ optimizeGridDirection(
   bounds,
   optimizer_info,
   likelihood_args,
+  profile_options,
   profile_costs,
+  lrt_threshold_vec,
   optimizer_exit_flags,
   optimal_params_matrix,
   optimization_success,
-  nested_cluster = NULL
+  nested_cluster = NULL,
+  generateData = NULL,
+  param_bootstrap_stats = NULL
 )
 }
 \arguments{
@@ -37,13 +41,23 @@ optimizeGridDirection(
 
 \item{likelihood_args}{List of arguments to pass to negLogLikelihood function}
 
+\item{profile_options}{Profiling options}
+
 \item{profile_costs}{Numeric vector to store profile costs (modified in place)}
+
+\item{lrt_threshold_vec}{Numeric vector to store likelihood ratio thresholds (modified in place)}
 
 \item{optimizer_exit_flags}{Character vector to store optimizer exit flags (modified in place)}
 
 \item{optimal_params_matrix}{Matrix to store optimal parameters for each grid point (modified in place)}
 
 \item{optimization_success}{Logical vector to track optimization success (modified in place)}
+
+\item{nested_cluster}{Optional cluster object for nested parallel computation}
+
+\item{generateData}{Function to generate bootstrap datasets}
+
+\item{param_bootstrap_stats}{Array to store bootstrap statistics for this parameter}
 }
 \value{
 List with updated arrays: profile_costs, optimizer_exit_flags, optimal_params_matrix, optimization_success, and success_count

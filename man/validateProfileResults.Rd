@@ -2,7 +2,7 @@
 % Please edit documentation in R/compute_parameter_profiles.R
 \name{validateProfileResults}
 \alias{validateProfileResults}
-\title{Validate Profile Results}
+\title{Validate Profile Computation Results}
 \usage{
 validateProfileResults(profiles, confidence_intervals, n_params, verbose)
 }
@@ -16,6 +16,8 @@ validateProfileResults(profiles, confidence_intervals, n_params, verbose)
 \item{verbose}{Logical for verbose output}
 }
 \description{
-Validate Profile Results
+Validates the results of profile likelihood computation, checking for
+successful profiles and confidence interval quality. Issues warnings
+for problematic results.
 }
 \keyword{internal}

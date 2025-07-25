@@ -4,10 +4,18 @@
 \alias{validateProfileOptions}
 \title{Validate Profile Options}
 \usage{
-validateProfileOptions(profile_options)
+validateProfileOptions(
+  profile_options,
+  generateData = NULL,
+  negLogLikelihood = NULL
+)
 }
 \arguments{
 \item{profile_options}{List of profiling options to validate}
+
+\item{generateData}{Function to generate bootstrap datasets (required for bootstrap method)}
+
+\item{negLogLikelihood}{Negative log-likelihood function (required for bootstrap validation)}
 }
 \description{
 Validate Profile Options

@@ -2,16 +2,13 @@
 % Please edit documentation in R/compute_parameter_profiles.R
 \name{findConfidenceBounds}
 \alias{findConfidenceBounds}
-\title{Find Confidence Bounds by Interpolation}
+\title{Find Confidence Bounds Using Threshold Crossing Detection}
 \usage{
 findConfidenceBounds(
   grid_values,
   profile_costs,
-  threshold_cost,
-  optimal_param_value,
-  bootstrap_stats = NULL,
-  param_index = NULL,
-  bootstrap_conf_level = NULL
+  lrt_threshold_vec,
+  optimal_param_value
 )
 }
 \arguments{
@@ -19,20 +16,15 @@ findConfidenceBounds(
 
 \item{profile_costs}{Profile cost values}
 
-\item{threshold_cost}{Threshold cost for confidence level (ignored if bootstrap_stats provided)}
+\item{lrt_threshold_vec}{Threshold likelihood ratios for confidence level}
 
 \item{optimal_param_value}{Optimal parameter value from params_current}
-
-\item{bootstrap_stats}{Optional 3D array of bootstrap statistics \link{n_bootstrap, n_params, n_grid}}
-
-\item{param_index}{Parameter index (required if bootstrap_stats provided)}
-
-\item{bootstrap_conf_level}{Bootstrap confidence level (required if bootstrap_stats provided)}
 }
 \value{
 List with confidence_bounds vector and grid_too_narrow flag
 }
 \description{
-Find Confidence Bounds by Interpolation
+Finds confidence interval bounds by detecting where likelihood ratios cross
+thresholds, using interpolation for accurate boundary estimation.
 }
 \keyword{internal}

@@ -2,25 +2,20 @@
 % Please edit documentation in R/compute_parameter_profiles.R
 \name{extractConfidenceInterval}
 \alias{extractConfidenceInterval}
-\title{Extract Confidence Interval from Profile}
+\title{Extract Confidence Interval from Profile Data}
 \usage{
-extractConfidenceInterval(
-  profile_data,
-  profile_options,
-  bootstrap_thresholds = NULL
-)
+extractConfidenceInterval(profile_data, profile_options)
 }
 \arguments{
 \item{profile_data}{Profile data structure}
 
 \item{profile_options}{Profiling options}
-
-\item{bootstrap_thresholds}{Optional bootstrap threshold statistics}
 }
 \value{
 List with confidence_bounds and grid_too_narrow flag
 }
 \description{
-Extract Confidence Interval from Profile
+Extracts confidence interval bounds from profile likelihood data by finding
+where the likelihood ratio crosses the specified threshold.
 }
 \keyword{internal}
