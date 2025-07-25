@@ -23,7 +23,7 @@
 #'   parallelization within \code{\link[DEoptim]{DEoptim}}.
 #' @param generateData Function to generate bootstrap datasets. Required when threshold_method is "bootstrap".
 #'   Should take a parameter vector and return a dataset that can be passed to negLogLikelihood.
-#'   The function signature should be: function(params) { ... return(dataset) }
+#'   The function signature should be: `function(params) { ... return(dataset) }`
 #' @param ... Additional arguments passed to the `negLogLikelihood` function
 #'
 #' @details The \code{profile_options} list can contain:

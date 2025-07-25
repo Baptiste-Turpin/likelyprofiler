@@ -48,7 +48,7 @@ parallelization within \code{\link[DEoptim]{DEoptim}}.}
 
 \item{generateData}{Function to generate bootstrap datasets. Required when threshold_method is "bootstrap".
 Should take a parameter vector and return a dataset that can be passed to negLogLikelihood.
-The function signature should be: function(params) { ... return(dataset) }}
+The function signature should be: \verb{function(params) \{ ... return(dataset) \}}}
 
 \item{...}{Additional arguments passed to the \code{negLogLikelihood} function}
 }

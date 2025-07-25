@@ -79,9 +79,7 @@ result = computeLikelihoodProfiles(
     grid_points = 15,
     max_grid_range_multiplier = 1.0
   ),
-  optimizer = "optim",
-  verbose = FALSE,
-  method = "L-BFGS-B"
+  verbose = FALSE
 )
 
 # Basic plotting
