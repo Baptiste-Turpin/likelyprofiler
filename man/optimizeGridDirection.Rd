@@ -21,7 +21,8 @@ optimizeGridDirection(
   optimization_success,
   nested_cluster = NULL,
   generateData = NULL,
-  param_bootstrap_stats = NULL
+  param_bootstrap_stats = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -58,6 +59,8 @@ optimizeGridDirection(
 \item{generateData}{Function to generate bootstrap datasets}
 
 \item{param_bootstrap_stats}{Array to store bootstrap statistics for this parameter}
+
+\item{verbose}{Logical indicating whether to print progress messages}
 }
 \value{
 List with updated arrays: profile_costs, optimizer_exit_flags, optimal_params_matrix, optimization_success, and success_count

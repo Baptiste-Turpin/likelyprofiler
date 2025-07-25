@@ -46,3 +46,47 @@ setup_simple_quadratic <- function() {
     bounds = bounds
   )
 }
+
+# Normal distribution setup for bootstrap testing
+setup_normal_bootstrap <- function() {
+  # Generate synthetic normal data
+  n <- 50  # Small for fast tests
+  true_mu <- 2.5
+  true_sigma <- 1.2
+  set.seed(42)  # Fixed seed for reproducible tests
+  data_normal <- rnorm(n, true_mu, true_sigma)
+  
+  # Set up bounds
+  bounds <- list(lower = c(-1, 0.1), upper = c(6, 4))
+  
+  # Define negative log-likelihood for normal distribution
+  negLogLikNormal <- function(params, dataset = data_normal) {
+    mu <- params[1]
+    sigma <- params[2]
+    if (sigma <= 0) return(1e10)  # Constraint: sigma > 0
+    -sum(dnorm(dataset, mu, sigma, log = TRUE))
+  }
+  
+  # Find ML estimates
+  ml_result <- optim(c(mean(data_normal), sd(data_normal)), negLogLikNormal, 
+                     dataset = data_normal, method = "L-BFGS-B", 
+                     lower = bounds$lower, upper = bounds$upper)
+  ml_params <- ml_result$par
+  names(ml_params) <- c("mu", "sigma")
+  
+  # Create bootstrap data generation function
+  generateData <- function(params) {
+    rnorm(n, params[1], params[2])
+  }
+  
+  list(
+    data = data_normal,
+    bounds = bounds,
+    negLogLik = negLogLikNormal,
+    ml_params = ml_params,
+    generateData = generateData,
+    n = n,
+    true_mu = true_mu,
+    true_sigma = true_sigma
+  )
+}

@@ -494,6 +494,12 @@ validateProfileOptions = function(profile_options, generateData = NULL, negLogLi
     if (!("dataset" %in% likelihood_args)) {
       stop("Error in computeLikelihoodProfiles: When threshold_method is 'bootstrap', negLogLikelihood function must accept a 'dataset' argument")
     }
+    if (!is.numeric(profile_options$n_bootstrap) || length(profile_options$n_bootstrap) != 1) {
+      stop("Error in validateProfileOptions: profile_options$n_bootstrap must be a single numeric value")
+    }
+    if (profile_options$n_bootstrap <= 0 || profile_options$n_bootstrap != round(profile_options$n_bootstrap)) {
+      stop("Error in validateProfileOptions: profile_options$n_bootstrap must be a positive integer")
+    }
   }
 
   # Issue warnings for potentially problematic values
@@ -530,6 +536,7 @@ validateProfileOptions = function(profile_options, generateData = NULL, negLogLi
 #' @param nested_cluster Optional cluster object for nested parallel computation
 #' @param generateData Function to generate bootstrap datasets
 #' @param param_bootstrap_stats Array to store bootstrap statistics for this parameter
+#' @param verbose Logical indicating whether to print progress messages
 #' @return List with updated arrays: profile_costs, optimizer_exit_flags, optimal_params_matrix, optimization_success, and success_count
 #' @keywords internal
 optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_start_params,
@@ -537,7 +544,8 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
                                  profile_options, profile_costs, lrt_threshold_vec,
                                  optimizer_exit_flags, optimal_params_matrix,
                                  optimization_success, nested_cluster = NULL,
-                                 generateData = NULL, param_bootstrap_stats = NULL) {
+                                 generateData = NULL, param_bootstrap_stats = NULL,
+                                 verbose = FALSE) {
 
   current_warm_start = warm_start_params
   success_count = 0
@@ -586,7 +594,8 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
         optimizer_info = optimizer_info,
         likelihood_args = likelihood_args,
         nested_cluster = nested_cluster,
-        generateData = generateData
+        generateData = generateData,
+        verbose = verbose
       )
       lrt_threshold_vec[j] = resultBootstrapLRT$threshold
       if (profile_options$threshold_method == "bootstrap" && is_success) {
@@ -600,13 +609,13 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
       # On failure, keep using previous warm start parameters
 
     }, error = function(e) {
-      warning(sprintf("Warning in optimizeGridDirection: Optimization failed for parameter %d at grid point %d: %s",
-                      param_index, j, e$message))
-      profile_costs[j] = NA
-      lrt_threshold_vec[j] = NA
-      optimizer_exit_flags[j] = "error"
-      optimization_success[j] = FALSE
-      optimal_params_matrix[j, ] = current_warm_start  # Use previous warm start
+      stop(sprintf("Error in optimizeGridDirection: Optimization failed for parameter %d at grid point %d: %s",
+                   param_index, j, e$message))
+      # profile_costs[j] = NA
+      # lrt_threshold_vec[j] = NA
+      # optimizer_exit_flags[j] = "error"
+      # optimization_success[j] = FALSE
+      # optimal_params_matrix[j, ] = current_warm_start  # Use previous warm start
       # Don't update warm start on error
     })
   }
@@ -639,17 +648,18 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
 #' @param likelihood_args Additional arguments for likelihood function
 #' @param nested_cluster Optional cluster for nested parallel computation
 #' @param generateData Function to generate bootstrap datasets from parameters
+#' @param verbose Logical for verbose output
 #' @return List with threshold value and bootstrap LRT statistics
 #' @keywords internal
 getBootstrapLRTThreshold = function(optimal_params, param_index, is_success, fixed_value,
                                     profile_options, negLogLikelihood, bounds,
                                     optimizer_info, likelihood_args, nested_cluster = NULL,
-                                    generateData = NULL) {
+                                    generateData = NULL, verbose = FALSE) {
 
   # If not bootstrap method or optimization failed, use fixed threshold
   if (profile_options$threshold_method != "bootstrap" || !is_success) {
     return(list(threshold = profile_options$ll_ratio_threshold,
-    lrt_stats = NULL))
+                lrt_stats = NULL))
   }
 
   # Generate bootstrap samples from null hypothesis (parameters at this grid point)
@@ -696,12 +706,12 @@ getBootstrapLRTThreshold = function(optimal_params, param_index, is_success, fix
       lrt_stats[b] = 2 * (h0_result$cost - h1_result$cost)
 
     }, error = function(e) {
-      warning(sprintf("Warning in getBootstrapLRTThreshold: Bootstrap iteration %d failed: %s",
-                      b, e$message))
+      stop(sprintf("Error in getBootstrapLRTThreshold: Bootstrap iteration %d failed: %s",
+                   b, e$message))
     })
   }
 
-  if (sum(!is.na(lrt_stats)) < 100){
+  if (sum(!is.na(lrt_stats)) < 100 && verbose && n_boot >= 200){
     warning(paste0("Warning in getBootstrapLRTThreshold: Less than 100 valid bootstrap iterations for parameter ",
                    param_index, ". This may lead to unreliable threshold estimation."))
   }
@@ -749,58 +759,93 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     nested_cluster = NULL
   }
 
-  tryCatch({
-    # Create grid for this parameter
-    grid_result = createParameterGrid(
-      param_index = param_index,
-      params_current = params_current,
-      bounds = bounds,
-      profile_options = profile_options
-    )
+  # Create grid for this parameter
+  grid_result = createParameterGrid(
+    param_index = param_index,
+    params_current = params_current,
+    bounds = bounds,
+    profile_options = profile_options
+  )
 
-    grid_values = grid_result$grid_values
+  grid_values = grid_result$grid_values
 
-    # Initialize exit flags structure
-    exit_flags = list(
-      low_success_rate = FALSE,
-      confidence_interval_failed = FALSE,
-      optimal_value_out_of_bounds = FALSE,
-      grid_issue = FALSE,
-      grid_too_narrow = FALSE
-    )
-    if (!is.null(grid_result$optimal_value_out_of_bounds)) {
-      exit_flags$optimal_value_out_of_bounds = grid_result$optimal_value_out_of_bounds
-    }
-    if (!is.null(grid_result$grid_issue)) {
-      exit_flags$grid_issue = grid_result$grid_issue
-    }
+  # Initialize exit flags structure
+  exit_flags = list(
+    low_success_rate = FALSE,
+    confidence_interval_failed = FALSE,
+    optimal_value_out_of_bounds = FALSE,
+    grid_issue = FALSE,
+    grid_too_narrow = FALSE
+  )
+  if (!is.null(grid_result$optimal_value_out_of_bounds)) {
+    exit_flags$optimal_value_out_of_bounds = grid_result$optimal_value_out_of_bounds
+  }
+  if (!is.null(grid_result$grid_issue)) {
+    exit_flags$grid_issue = grid_result$grid_issue
+  }
 
-    n_grid = length(grid_values)
-    profile_costs = numeric(n_grid)
-    lrt_threshold_vec = rep(profile_options$ll_ratio_threshold, n_grid)
-    optimizer_exit_flags = character(n_grid)
-    optimal_params_matrix = matrix(NA, nrow = n_grid, ncol = length(params_current))
+  n_grid = length(grid_values)
+  profile_costs = numeric(n_grid)
+  lrt_threshold_vec = rep(profile_options$ll_ratio_threshold, n_grid)
+  optimizer_exit_flags = character(n_grid)
+  optimal_params_matrix = matrix(NA, nrow = n_grid, ncol = length(params_current))
 
-    if (verbose) {
-      cat(sprintf("  Evaluating %d grid points...\n", n_grid))
-    }
+  if (verbose) {
+    cat(sprintf("  Evaluating %d grid points...\n", n_grid))
+  }
 
-    # Find the index of the optimal parameter value in the grid
-    optimal_index = which.min(abs(grid_values - params_current[param_index]))
+  # Find the index of the optimal parameter value in the grid
+  optimal_index = which.min(abs(grid_values - params_current[param_index]))
 
-    # Initialize warm start parameters
-    warm_start_params = params_current
+  # Initialize warm start parameters
+  warm_start_params = params_current
 
-    # Initialize success tracking
-    optimization_success = logical(n_grid)
-    success_count = 0
+  # Initialize success tracking
+  optimization_success = logical(n_grid)
+  success_count = 0
 
-    # Optimize right side (from optimal outward)
-    right_result = optimizeGridDirection(
-      grid_indices = optimal_index:n_grid,
+  # Optimize right side (from optimal outward)
+  right_result = optimizeGridDirection(
+    grid_indices = optimal_index:n_grid,
+    param_index = param_index,
+    grid_values = grid_values,
+    warm_start_params = params_current,
+    negLogLikelihood = negLogLikelihood,
+    bounds = bounds,
+    optimizer_info = optimizer_info,
+    likelihood_args = likelihood_args,
+    profile_options = profile_options,
+    profile_costs = profile_costs,
+    lrt_threshold_vec = lrt_threshold_vec,
+    optimizer_exit_flags = optimizer_exit_flags,
+    optimal_params_matrix = optimal_params_matrix,
+    optimization_success = optimization_success,
+    nested_cluster = nested_cluster,
+    generateData = generateData,
+    param_bootstrap_stats = NULL,
+    verbose = verbose
+  )
+
+  # Update arrays with right side results
+  profile_costs = right_result$profile_costs
+  lrt_threshold_vec = right_result$lrt_threshold_vec
+  optimizer_exit_flags = right_result$optimizer_exit_flags
+  optimal_params_matrix = right_result$optimal_params_matrix
+  optimization_success = right_result$optimization_success
+  success_count = success_count + right_result$success_count
+
+  # Collect bootstrap stats for this parameter
+  param_bootstrap_stats = right_result$bootstrap_stats
+
+  # Optimize left side (from optimal outward) - reset warm start
+  # Only happens if the optimal index is not the first grid point
+  # i.e. there is a left side to explore
+  if (optimal_index > 1) {
+    left_result = optimizeGridDirection(
+      grid_indices = seq(optimal_index-1, 1),
       param_index = param_index,
       grid_values = grid_values,
-      warm_start_params = params_current,
+      warm_start_params = params_current,  # Reset to original optimal params
       negLogLikelihood = negLogLikelihood,
       bounds = bounds,
       optimizer_info = optimizer_info,
@@ -813,141 +858,88 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
       optimization_success = optimization_success,
       nested_cluster = nested_cluster,
       generateData = generateData,
-      param_bootstrap_stats = NULL
+      param_bootstrap_stats = param_bootstrap_stats,
+      verbose = verbose
     )
 
-    # Update arrays with right side results
-    profile_costs = right_result$profile_costs
-    lrt_threshold_vec = right_result$lrt_threshold_vec
-    optimizer_exit_flags = right_result$optimizer_exit_flags
-    optimal_params_matrix = right_result$optimal_params_matrix
-    optimization_success = right_result$optimization_success
-    success_count = success_count + right_result$success_count
+    # Update arrays with left side results
+    profile_costs = left_result$profile_costs
+    lrt_threshold_vec = left_result$lrt_threshold_vec
+    optimizer_exit_flags = left_result$optimizer_exit_flags
+    optimal_params_matrix = left_result$optimal_params_matrix
+    optimization_success = left_result$optimization_success
+    success_count = success_count + left_result$success_count
 
-    # Collect bootstrap stats for this parameter
-    param_bootstrap_stats = right_result$bootstrap_stats
-
-    # Optimize left side (from optimal outward) - reset warm start
-    # Only happens if the optimal index is not the first grid point
-    # i.e. there is a left side to explore
-    if (optimal_index > 1) {
-      left_result = optimizeGridDirection(
-        grid_indices = seq(optimal_index-1, 1),
-        param_index = param_index,
-        grid_values = grid_values,
-        warm_start_params = params_current,  # Reset to original optimal params
-        negLogLikelihood = negLogLikelihood,
-        bounds = bounds,
-        optimizer_info = optimizer_info,
-        likelihood_args = likelihood_args,
-        profile_options = profile_options,
-        profile_costs = profile_costs,
-        lrt_threshold_vec = lrt_threshold_vec,
-        optimizer_exit_flags = optimizer_exit_flags,
-        optimal_params_matrix = optimal_params_matrix,
-        optimization_success = optimization_success,
-        nested_cluster = nested_cluster,
-        generateData = generateData,
-        param_bootstrap_stats = param_bootstrap_stats
-      )
-
-      # Update arrays with left side results
-      profile_costs = left_result$profile_costs
-      lrt_threshold_vec = left_result$lrt_threshold_vec
-      optimizer_exit_flags = left_result$optimizer_exit_flags
-      optimal_params_matrix = left_result$optimal_params_matrix
-      optimization_success = left_result$optimization_success
-      success_count = success_count + left_result$success_count
-
-      # Merge left side bootstrap stats
-      if (!is.null(left_result$bootstrap_stats) && !is.null(param_bootstrap_stats)) {
-        param_bootstrap_stats = left_result$bootstrap_stats
-      }
+    # Merge left side bootstrap stats
+    if (!is.null(left_result$bootstrap_stats) && !is.null(param_bootstrap_stats)) {
+      param_bootstrap_stats = left_result$bootstrap_stats
     }
+  }
 
-    # Calculate success rate and set exit flags
-    success_rate = success_count / n_grid
-    if (success_rate < 0.5) {
-      exit_flags$low_success_rate = TRUE
-    }
-    # Check if corresponding cost is below threshold. If not set current params at this index
-    # to the minimum observed cost with a warning.
-    min_cost_index = which.min(profile_costs)
-    min_observed_cost = profile_costs[min_cost_index]
-    optimal_grid_cost = profile_costs[optimal_index]
+  # Calculate success rate and set exit flags
+  success_rate = success_count / n_grid
+  if (success_rate < 0.5) {
+    exit_flags$low_success_rate = TRUE
+  }
+  # Check if corresponding cost is below threshold. If not set current params at this index
+  # to the minimum observed cost with a warning.
+  min_cost_index = which.min(profile_costs)
+  min_observed_cost = profile_costs[min_cost_index]
+  optimal_grid_cost = profile_costs[optimal_index]
 
-    # If the cost at optimal parameter position is significantly higher than minimum found
-    ll_ratio_optimal = 2 * (optimal_grid_cost - min_observed_cost)
-    lrt_threshold_optimal = lrt_threshold_vec[optimal_index]
-    if (!is.na(optimal_grid_cost) && ll_ratio_optimal >= lrt_threshold_optimal) {
-      warning(sprintf("Warning in computeLikelihoodProfiles: For parameter %d, likelihood ratio test at provided optimal parameter (%.4f) exceeds threshold (%.4f). Using best parameters found during profiling.",
-                      param_index, ll_ratio_optimal, lrt_threshold_optimal), call. = FALSE)
+  # If the cost at optimal parameter position is significantly higher than minimum found
+  ll_ratio_optimal = 2 * (optimal_grid_cost - min_observed_cost)
+  lrt_threshold_optimal = lrt_threshold_vec[optimal_index]
+  if (!is.na(optimal_grid_cost) && ll_ratio_optimal >= lrt_threshold_optimal) {
+    warning(sprintf("Warning in computeLikelihoodProfiles: For parameter %d, likelihood ratio test at provided optimal parameter (%.4f) exceeds threshold (%.4f). Using best parameters found during profiling.",
+                    param_index, ll_ratio_optimal, lrt_threshold_optimal), call. = FALSE)
 
-      # Update the profile data to use the best parameters found
-      optimal_param_value = grid_values[min_cost_index]
-    } else {
-      optimal_param_value = params_current[param_index]
-    }
+    # Update the profile data to use the best parameters found
+    optimal_param_value = grid_values[min_cost_index]
+  } else {
+    optimal_param_value = params_current[param_index]
+  }
 
-    # Create profile data structure
-    profile_data = list(
-      param_index = param_index,
-      optimal_param_value = optimal_param_value,
-      grid_values = grid_values,
-      profile_costs = profile_costs,
-      lrt_threshold_vec = lrt_threshold_vec,
-      optimizer_exit_flags = optimizer_exit_flags,
-      optimal_params_matrix = optimal_params_matrix,
-      optimization_success = optimization_success,
-      success_rate = success_rate,
-      exit_flags = exit_flags,
-      optimal_cost = min_observed_cost,
-      failed = FALSE
-    )
+  # Create profile data structure
+  profile_data = list(
+    param_index = param_index,
+    optimal_param_value = optimal_param_value,
+    grid_values = grid_values,
+    profile_costs = profile_costs,
+    lrt_threshold_vec = lrt_threshold_vec,
+    optimizer_exit_flags = optimizer_exit_flags,
+    optimal_params_matrix = optimal_params_matrix,
+    optimization_success = optimization_success,
+    success_rate = success_rate,
+    exit_flags = exit_flags,
+    optimal_cost = min_observed_cost,
+    failed = FALSE
+  )
 
-    # Extract confidence interval
-    ci_result = extractConfidenceInterval(
-      profile_data = profile_data,
-      profile_options = profile_options
-    )
+  # Extract confidence interval
+  ci_result = extractConfidenceInterval(
+    profile_data = profile_data,
+    profile_options = profile_options
+  )
 
-    confidence_interval = ci_result$confidence_bounds
+  confidence_interval = ci_result$confidence_bounds
 
-    # Update exit flags based on CI extraction
-    if (any(is.na(confidence_interval))) {
-      profile_data$exit_flags$confidence_interval_failed = TRUE
-    }
+  # Update exit flags based on CI extraction
+  if (any(is.na(confidence_interval))) {
+    profile_data$exit_flags$confidence_interval_failed = TRUE
+  }
 
-    # Update exit flags for grid too narrow condition
-    if (ci_result$grid_too_narrow) {
-      profile_data$exit_flags$grid_too_narrow = TRUE
-    }
+  # Update exit flags for grid too narrow condition
+  if (ci_result$grid_too_narrow) {
+    profile_data$exit_flags$grid_too_narrow = TRUE
+  }
 
-    return(list(
-      profile = profile_data,
-      confidence_interval = confidence_interval,
-      bootstrap_stats = param_bootstrap_stats
-    ))
+  return(list(
+    profile = profile_data,
+    confidence_interval = confidence_interval,
+    bootstrap_stats = param_bootstrap_stats
+  ))
 
-  }, error = function(e) {
-    warning(sprintf("Warning in computeParameterProfile: Failed to compute profile for parameter %d: %s", param_index, e$message))
-
-    profile_data = list(
-      param_index = param_index,
-      optimal_param_value = params_current[param_index],
-      grid_values = numeric(0),
-      profile_costs = numeric(0),
-      optimizer_exit_flags = character(0),
-      optimal_cost = NA,
-      failed = TRUE,
-      error_message = e$message
-    )
-
-    return(list(
-      profile = profile_data,
-      confidence_interval = c(NA, NA)
-    ))
-  })
 }
 
 #' Create Parameter Grid

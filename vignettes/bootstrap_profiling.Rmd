@@ -5,15 +5,15 @@ output:
     toc: true
     toc_depth: 2
 vignette: >
-  %\VignetteIndexEntry{Bootstrap Profile Likelihood Confidence Intervals}
+%\VignetteIndexEntry{Bootstrap Profile Likelihood Confidence Intervals}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
----
-
-```{r, include = FALSE}
+  ---
+  
+  ```{r, include = FALSE}
 knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
+collapse = TRUE,
+comment = "#>"
 )
 ```
 
@@ -32,10 +32,10 @@ We'll use a simple normal distribution example where both methods should give si
 
 ```{r}
 # Generate synthetic normal data
-n = 100
+n_data = 100
 true_mu = 2.5
 true_sigma = 1.2
-data_normal = rnorm(n, true_mu, true_sigma)
+data_normal = rnorm(n_data, true_mu, true_sigma)
 
 # Set up bounds
 bounds = list(lower = c(-1, 0.1), upper = c(6, 4))
@@ -50,8 +50,8 @@ negLogLikNormal = function(params, dataset = data_normal) {
 
 # Find ML estimates
 ml_result = optim(c(mean(data_normal), sd(data_normal)), negLogLikNormal, 
-                   dataset = data_normal, method = "L-BFGS-B", 
-                   lower = bounds$lower, upper = bounds$upper)
+                  dataset = data_normal, method = "L-BFGS-B", 
+                  lower = bounds$lower, upper = bounds$upper)
 ml_params = ml_result$par
 names(ml_params) = c("mu", "sigma")
 ```
@@ -64,11 +64,25 @@ Define a function to generate bootstrap datasets from the fitted distribution:
 # Create bootstrap data generation function
 generateData = function(params) {
   # Generate new dataset from current parameter estimates
-  rnorm(n, params[1], params[2])
+  rnorm(n_data, params[1], params[2])
 }
 ```
 
 ## Compare Fixed vs Bootstrap Methods
+
+```{r param_parallel_hidden, include=FALSE}
+# Create a cluster for parameter-level parallelization (vignette building)
+lib_likelyprofiler = dirname(path.package("likelyprofiler"))
+cluster = parallel::makeCluster(2)
+parallel::clusterExport(cluster, c("lib_likelyprofiler", "n_data"))
+invisible(parallel::clusterEvalQ(cluster, library(likelyprofiler, lib.loc = lib_likelyprofiler)))
+```
+
+```{r param_parallel_user, eval=FALSE}
+# Create a cluster for parameter-level parallelization
+cluster = parallel::makeCluster(2)
+parallel::clusterExport(cluster, "n_data")
+```
 
 ```{r}
 # Fixed threshold method (traditional)
@@ -81,6 +95,7 @@ result_fixed = computeLikelihoodProfiles(
     threshold_method = "fixed",
     ll_ratio_threshold = qchisq(0.95, 1)  # 95% CI
   ),
+  cluster = cluster,
   dataset = data_normal,
   verbose = FALSE
 )
@@ -94,21 +109,16 @@ result_bootstrap = computeLikelihoodProfiles(
     grid_points = 50,
     threshold_method = "bootstrap",
     bootstrap_conf_level = 0.95,
-    n_bootstrap = 500
+    n_bootstrap = 200
   ),
   generateData = generateData,
+  cluster = cluster,
   dataset = data_normal,
   verbose = FALSE
 )
 ```
 
 ## Plot results
-
-```{r}
-plotLikelihoodProfiles(result_fixed,
-                       true_values = c(true_mu, true_sigma),
-                       options = list(log_scale = FALSE))
-```
 
 Plot bootstrap LRT statistics:
 
@@ -118,24 +128,31 @@ if (!is.null(result_bootstrap$bootstrap_stats)) {
   # Plot histogram of LRT statistics for first parameter at grid midpoint
   midpoint_idx = ceiling(dim(result_bootstrap$bootstrap_stats)[3] / 2)
   bootstrap_stats_to_plot = result_bootstrap$bootstrap_stats[, 1, midpoint_idx]
+  q95_chisquared = qchisq(0.95, 1)
   q95_observed = quantile(bootstrap_stats_to_plot, probs = 0.95)
   hist(bootstrap_stats_to_plot, 
        main = "Bootstrap LRT Statistics (Parameter 1, Grid Midpoint)",
        xlab = "LRT Statistic", breaks = 30)
-  abline(v = qchisq(0.95, 1), col = "red", lty = 2, lwd = 2)
+  abline(v = q95_chisquared, col = "red", lty = 2, lwd = 2)
   abline(v = q95_observed, col = "blue", lty = 2, lwd = 2)
   legend("topright", c("Chi-squared(1, 0.95)", "Observed 95% quantile"), col = c("red", "blue"), lty = 2)
+  # Print the chi-squared quantile and the observed 95% quantile (also print the relative difference)
+  cat(sprintf("Chi-squared(1, 0.95): %.4f\n", q95_chisquared))
+  cat(sprintf("Observed 95%% quantile: %.4f\n", q95_observed))
+  cat(sprintf("Relative difference: %.4f%%\n", 
+              100 * (q95_observed - q95_chisquared) / q95_chisquared))
   
-  # Plot LRT statistics across grid for first parameter  
-  matplot(seq_len(dim(result_bootstrap$bootstrap_stats)[3]), 
-          t(result_bootstrap$bootstrap_stats[1:20, 1, ]), 
-          type = "p", pch = 16, cex = 0.5,
-          main = "Bootstrap LRT Statistics Across Grid (Parameter 1)",
-          xlab = "Grid Point", ylab = "LRT Statistic")
-  abline(h = qchisq(0.95, 1), col = "red", lty = 2, lwd = 2)
+  # Plot LRT statistics across grid for first parameter
+  allq95_observed = apply(result_bootstrap$bootstrap_stats[,1,], 2, quantile, probs = 0.95, na.rm = TRUE)
+  plot(seq_len(dim(result_bootstrap$bootstrap_stats)[3]), allq95_observed, pch = 16, cex = 1.5, col = "blue",
+       main = "Bootstrap LRT Statistics Across Grid (Parameter 1)",
+       ylim = c(min(allq95_observed), 6),
+       xlab = "Grid Point", ylab = "LRT Statistic")
+  abline(h = q95_chisquared, col = "red", lty = 2, lwd = 2)
+  legend("topright", c("Chi-squared(1, 0.95)", "Observed 95% quantile"), col = c("red", "blue"), lty = 2)
 }
 ```
-
+The difference between the thresholds will decrease with more bootstrap samples in this example.
 
 
 ## Results Comparison

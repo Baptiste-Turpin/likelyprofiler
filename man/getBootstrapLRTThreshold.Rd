@@ -15,7 +15,8 @@ getBootstrapLRTThreshold(
   optimizer_info,
   likelihood_args,
   nested_cluster = NULL,
-  generateData = NULL
+  generateData = NULL,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -40,6 +41,8 @@ getBootstrapLRTThreshold(
 \item{nested_cluster}{Optional cluster for nested parallel computation}
 
 \item{generateData}{Function to generate bootstrap datasets from parameters}
+
+\item{verbose}{Logical for verbose output}
 }
 \value{
 List with threshold value and bootstrap LRT statistics
