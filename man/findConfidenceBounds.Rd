@@ -21,7 +21,7 @@ findConfidenceBounds(
 \item{optimal_param_value}{Optimal parameter value from params_current}
 }
 \value{
-List with confidence_bounds vector and grid_too_narrow flag
+List with confidence_bounds vector and flags: grid_too_narrow, few_within_threshold
 }
 \description{
 Finds confidence interval bounds by detecting where likelihood ratios cross

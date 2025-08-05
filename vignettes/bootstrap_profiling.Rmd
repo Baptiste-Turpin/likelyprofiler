@@ -204,6 +204,7 @@ cat(sprintf("sigma: [%.4f, %.4f]\n", theoretical_ci_sigma[1], theoretical_ci_sig
 ## Summary
 
 The bootstrap method provides:
+
 - Data-driven thresholds that don't rely on asymptotic assumptions
 - More robust confidence intervals for complex likelihood surfaces
 - Similar results to chi-squared method when asymptotic conditions are met

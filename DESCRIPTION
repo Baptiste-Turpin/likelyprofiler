@@ -7,7 +7,12 @@ Authors@R:
            role = c("aut", "cre"),
            email = "t.baptiste0@gmail.com",
 		   comment = c(ORCID = "0000-0001-8853-8718"))
-Description: Simple package with for computing profile likelihood confidence intervals for general objective functions using grid-based optimization. Focus on potentially computationally intensive objective functions, with control over the number of evaluations and optimization tools. Supports multiple optimization algorithms (optim, DEoptim, custom optimizers), bootstrap likelihood ratio tests for data-driven confidence thresholds, parallel computation, and flexible grid methods.
+Description: Profile likelihood confidence intervals for general objective 
+	functions. Focus on potentially computationally intensive objective 
+	functions, with control over the number of grid points and optimization 
+	tools. Supports multiple optimization algorithms (optim, DEoptim, custom 
+	optimizers), bootstrap likelihood ratio tests for data-driven confidence 
+	thresholds, parallel computation, and flexible grid methods.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

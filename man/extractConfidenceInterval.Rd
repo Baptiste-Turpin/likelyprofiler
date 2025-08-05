@@ -12,7 +12,7 @@ extractConfidenceInterval(profile_data, profile_options)
 \item{profile_options}{Profiling options}
 }
 \value{
-List with confidence_bounds and grid_too_narrow flag
+List with confidence_bounds and flags grid_too_narrow and few_within_threshold
 }
 \description{
 Extracts confidence interval bounds from profile likelihood data by finding

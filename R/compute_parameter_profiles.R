@@ -775,7 +775,8 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     confidence_interval_failed = FALSE,
     optimal_value_out_of_bounds = FALSE,
     grid_issue = FALSE,
-    grid_too_narrow = FALSE
+    grid_too_narrow = FALSE,
+    few_within_threshold = FALSE
   )
   if (!is.null(grid_result$optimal_value_out_of_bounds)) {
     exit_flags$optimal_value_out_of_bounds = grid_result$optimal_value_out_of_bounds
@@ -932,6 +933,10 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
   # Update exit flags for grid too narrow condition
   if (ci_result$grid_too_narrow) {
     profile_data$exit_flags$grid_too_narrow = TRUE
+  }
+
+  if (ci_result$few_within_threshold) {
+    profile_data$exit_flags$few_within_threshold = TRUE
   }
 
   return(list(
@@ -1187,12 +1192,12 @@ evaluateConditionalCost = function(free_params, param_index, fixed_value,
 #'
 #' @param profile_data Profile data structure
 #' @param profile_options Profiling options
-#' @return List with confidence_bounds and grid_too_narrow flag
+#' @return List with confidence_bounds and flags grid_too_narrow and few_within_threshold
 #' @keywords internal
 extractConfidenceInterval = function(profile_data, profile_options) {
 
   if (profile_data$failed || length(profile_data$profile_costs) == 0) {
-    return(list(confidence_bounds = c(NA, NA), grid_too_narrow = FALSE))
+    return(list(confidence_bounds = c(NA, NA), grid_too_narrow = FALSE, few_within_threshold = FALSE))
   }
 
   # Find confidence bounds
@@ -1215,12 +1220,13 @@ extractConfidenceInterval = function(profile_data, profile_options) {
 #' @param profile_costs Profile cost values
 #' @param lrt_threshold_vec Threshold likelihood ratios for confidence level
 #' @param optimal_param_value Optimal parameter value from params_current
-#' @return List with confidence_bounds vector and grid_too_narrow flag
+#' @return List with confidence_bounds vector and flags: grid_too_narrow, few_within_threshold
 #' @keywords internal
 findConfidenceBounds = function(grid_values, profile_costs, lrt_threshold_vec, optimal_param_value) {
 
+  few_within_threshold = FALSE
   if (length(grid_values) < 2) {
-    return(list(confidence_bounds = c(NA, NA), grid_too_narrow = FALSE))
+    return(list(confidence_bounds = c(NA, NA), grid_too_narrow = FALSE, few_within_threshold = few_within_threshold))
   }
 
   # Sort by grid values
@@ -1233,13 +1239,20 @@ findConfidenceBounds = function(grid_values, profile_costs, lrt_threshold_vec, o
   # Convert costs to likelihood ratios
   ll_ratios = 2 * (sorted_costs - min(sorted_costs, na.rm = TRUE))
 
-  # Check if all points are within threshold (grid too narrow condition)
+  # Check how many points are within the threshold
   within_threshold = ll_ratios <= lrt_threshold_vec
+  within_threshold_count = sum(within_threshold, na.rm = TRUE)
+  if (within_threshold_count < 3) {
+    few_within_threshold = TRUE
+  }
+
+  # Check if all points are within threshold (grid too narrow condition)
   if (all(within_threshold, na.rm = TRUE)) {
     # All points within threshold - grid too narrow
     return(list(
       confidence_bounds = c(min(sorted_grid), max(sorted_grid)),
-      grid_too_narrow = TRUE
+      grid_too_narrow = TRUE,
+      few_within_threshold = few_within_threshold
     ))
   }
 
@@ -1276,17 +1289,19 @@ findConfidenceBounds = function(grid_values, profile_costs, lrt_threshold_vec, o
   if (length(crossings) == 0) {
     # No crossings found - check if all points are within threshold
     if (sum(within_threshold, na.rm = TRUE) == 0) {
-      return(list(confidence_bounds = c(NA, NA), grid_too_narrow = FALSE))
+      return(list(confidence_bounds = c(NA, NA), grid_too_narrow = FALSE, few_within_threshold = few_within_threshold))
     } else {
       # Some points within threshold - use their extremes
       within_indices = which(within_threshold & !is.na(within_threshold))
-      return(list(confidence_bounds = c(min(sorted_grid[within_indices]), max(sorted_grid[within_indices])), grid_too_narrow = FALSE))
+      return(list(confidence_bounds = c(min(sorted_grid[within_indices]), max(sorted_grid[within_indices])),
+                  grid_too_narrow = FALSE,
+                  few_within_threshold = few_within_threshold))
     }
   }
 
   # Find regions within threshold
   if (sum(within_threshold, na.rm = TRUE) == 0) {
-    return(list(confidence_bounds = c(NA, NA), grid_too_narrow = FALSE))
+    return(list(confidence_bounds = c(NA, NA), grid_too_narrow = FALSE, few_within_threshold = few_within_threshold))
   }
 
   # Determine bounds based on crossings and threshold regions
@@ -1320,7 +1335,7 @@ findConfidenceBounds = function(grid_values, profile_costs, lrt_threshold_vec, o
     upper_bound = temp
   }
 
-  return(list(confidence_bounds = c(lower_bound, upper_bound), grid_too_narrow = FALSE))
+  return(list(confidence_bounds = c(lower_bound, upper_bound), grid_too_narrow = FALSE, few_within_threshold = few_within_threshold))
 }
 
 #' Issue Consolidated Warnings for Profile Results
@@ -1340,6 +1355,7 @@ issueConsolidatedWarnings = function(profiles, n_params) {
   bounds_issue_params = c()
   grid_issue_params = c()
   grid_too_narrow_params = c()
+  few_within_threshold_params = c()
 
   # Analyze exit flags
   for (i in 1:n_params) {
@@ -1350,6 +1366,7 @@ issueConsolidatedWarnings = function(profiles, n_params) {
       if (isTRUE(flags$optimal_value_out_of_bounds)) bounds_issue_params = c(bounds_issue_params, i)
       if (isTRUE(flags$grid_issue)) grid_issue_params = c(grid_issue_params, i)
       if (isTRUE(flags$grid_too_narrow)) grid_too_narrow_params = c(grid_too_narrow_params, i)
+      if (isTRUE(flags$few_within_threshold)) few_within_threshold_params = c(few_within_threshold_params, i)
     }
   }
 
@@ -1382,6 +1399,11 @@ issueConsolidatedWarnings = function(profiles, n_params) {
   if (length(grid_too_narrow_params) > 0) {
     warning(sprintf("Warning in computeLikelihoodProfiles: Grid too narrow to capture confidence interval bounds for parameter(s): %s. Consider increasing max_grid_range_multiplier.",
                     paste(grid_too_narrow_params, collapse = ", ")), call. = FALSE)
+  }
+
+  if (length(few_within_threshold_params) > 0) {
+    warning(sprintf("Warning in computeLikelihoodProfiles: Few grid points (<3) within threshold for parameter(s): %s. Consider adjusting profiling options.",
+                    paste(few_within_threshold_params, collapse = ", ")), call. = FALSE)
   }
 }
 
