@@ -41,7 +41,7 @@ results to visualize confidence intervals and likelihood surfaces.
 \itemize{
 \item \strong{Multiple optimizers}: Supports \code{\link[stats]{optim}}, \code{\link[DEoptim]{DEoptim}}, and custom optimization functions.
 \item \strong{Bootstrap thresholds}: Data-driven confidence thresholds using bootstrap likelihood ratio tests
-\item \strong{Grid methods}: Uniform and adaptive grid spacing for parameter exploration
+\item \strong{Grid methods}: Linear and quadratic grid spacing for parameter exploration
 \item \strong{Parallel computation}: Optional cluster-based parallel execution for faster computation
 \item \strong{Robust validation}: Comprehensive input validation and error handling
 \item \strong{Flexible configuration}: Customizable grid parameters, optimization options, and confidence levels

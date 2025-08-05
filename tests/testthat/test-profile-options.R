@@ -3,13 +3,13 @@
 test_that("Different profile options work", {
   setup = setup_gaussian_mixture(d = 3)
 
-  # Test uniform grid
-  result_uniform = computeLikelihoodProfiles(
+  # Test linear grid
+  result_linear = computeLikelihoodProfiles(
     params_current = setup$optimized_params,
     negLogLikelihood = setup$mlogf,
     bounds = setup$bounds,
     profile_options = list(
-      grid_method = "uniform",
+      grid_method = "linear",
       grid_points = 6,
       ll_ratio_threshold = 3.84
     ),
@@ -17,13 +17,13 @@ test_that("Different profile options work", {
     gamma = setup$gamma
   )
 
-  # Test adaptive grid
-  result_adaptive = computeLikelihoodProfiles(
+  # Test quadratic grid
+  result_quadratic = computeLikelihoodProfiles(
     params_current = setup$optimized_params,
     negLogLikelihood = setup$mlogf,
     bounds = setup$bounds,
     profile_options = list(
-      grid_method = "adaptive",
+      grid_method = "quadratic",
       grid_points = 6,
       ll_ratio_threshold = 3.84
     ),
@@ -32,10 +32,10 @@ test_that("Different profile options work", {
   )
 
   # Both should succeed
-  expect_true(is.list(result_uniform))
-  expect_true(is.list(result_adaptive))
-  expect_equal(length(result_uniform$profiles), 3)
-  expect_equal(length(result_adaptive$profiles), 3)
+  expect_true(is.list(result_linear))
+  expect_true(is.list(result_quadratic))
+  expect_equal(length(result_linear$profiles), 3)
+  expect_equal(length(result_quadratic$profiles), 3)
 
   # Test invalid grid method
   expect_error(
@@ -47,6 +47,6 @@ test_that("Different profile options work", {
       verbose = FALSE,
       gamma = setup$gamma
     ),
-    "Error in validateProfileOptions: profile_options\\$grid_method must be one of: uniform, adaptive"
+    "Error in validateProfileOptions: profile_options\\$grid_method must be one of: linear, quadratic"
   )
 })

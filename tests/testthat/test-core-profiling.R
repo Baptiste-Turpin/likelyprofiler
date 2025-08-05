@@ -8,7 +8,7 @@ test_that("Multidimensional Gaussian mixture profiling works", {
     negLogLikelihood = setup$mlogf,
     bounds = setup$bounds,
     profile_options = list(
-      grid_method = "adaptive",
+      grid_method = "quadratic",
       grid_points = 10,  # Small for speed
       max_grid_range_multiplier = 1.0
     ),
@@ -49,7 +49,7 @@ test_that("One-dimensional Gaussian mixture profiling works", {
     negLogLikelihood = setup$mlogf,
     bounds = setup$bounds,
     profile_options = list(
-      grid_method = "uniform",
+      grid_method = "linear",
       grid_points = 8,  # Small for speed
       max_grid_range_multiplier = 1.5
     ),
@@ -78,7 +78,7 @@ test_that("Simple quadratic function profiling works", {
     negLogLikelihood = setup$likelihood,
     bounds = setup$bounds,
     profile_options = list(
-      grid_method = "uniform",
+      grid_method = "linear",
       grid_points = 8,
       max_grid_range_multiplier = 0.8
     ),

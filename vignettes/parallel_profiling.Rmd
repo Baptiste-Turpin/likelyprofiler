@@ -75,7 +75,7 @@ bounds = list(lower = rep(-2, d), upper = rep(2, d))
 
 # Use smaller grid for faster demonstration
 profile_options = list(
-  grid_method = "adaptive",
+  grid_method = "quadratic",
   grid_points = 50,  # Reduced for faster execution
   max_grid_range_multiplier = 1.5
 )

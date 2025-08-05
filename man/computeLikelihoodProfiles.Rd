@@ -71,9 +71,10 @@ parallel using a grid-based approach with customizable optimization methods.
 \details{
 The \code{profile_options} list can contain:
 \itemize{
-\item \code{grid_method}: "uniform" or "adaptive" (default: "adaptive").
-"uniform" uses evenly spaced grid points, "adaptive" adjusts the density of grid points
-to be more dense near the optimum using a quadratic spacing.
+\item \code{grid_method}: "linear" or "quadratic" (default: "quadratic").
+"linear" creates linear spacing on each side of the optimum (may have different spacing
+on left/right sides if optimum is off-center). "quadratic" uses quadratic transformation
+for denser sampling near the optimum with progressively wider spacing away from it.
 \item \code{grid_points}: Number of grid points per parameter (default: 100)
 \item \code{max_grid_range_multiplier}: Controls the width of the profiling grid as a
 fraction of the total parameter range defined by bounds. The grid is centered around
@@ -157,7 +158,7 @@ result = computeLikelihoodProfiles(
   negLogLikelihood = quadratic_likelihood,
   bounds = bounds,
   profile_options = list(
-    grid_method = "adaptive",
+    grid_method = "quadratic",
     grid_points = 15,  # Small grid for quick execution
     max_grid_range_multiplier = 1.0
   ),

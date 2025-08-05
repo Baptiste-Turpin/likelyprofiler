@@ -60,7 +60,7 @@ test_that("Profile options validation works correctly", {
       profile_options = list(grid_method = "invalid_method"),
       gamma = setup$gamma
     ),
-    "Error in validateProfileOptions: profile_options\\$grid_method must be one of: uniform, adaptive"
+    "Error in validateProfileOptions: profile_options\\$grid_method must be one of: linear, quadratic"
   )
 
   # Test invalid grid_points - non-numeric

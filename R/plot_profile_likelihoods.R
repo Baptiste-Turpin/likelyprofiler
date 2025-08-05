@@ -58,7 +58,7 @@
 #'   negLogLikelihood = quadratic_likelihood,
 #'   bounds = bounds,
 #'   profile_options = list(
-#'     grid_method = "adaptive",
+#'     grid_method = "quadratic",
 #'     grid_points = 15,
 #'     max_grid_range_multiplier = 1.0
 #'   ),

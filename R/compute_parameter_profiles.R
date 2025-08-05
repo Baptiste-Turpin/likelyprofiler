@@ -28,9 +28,10 @@
 #'
 #' @details The \code{profile_options} list can contain:
 #' \itemize{
-#'   \item \code{grid_method}: "uniform" or "adaptive" (default: "adaptive").
-#'   "uniform" uses evenly spaced grid points, "adaptive" adjusts the density of grid points
-#'   to be more dense near the optimum using a quadratic spacing.
+#'   \item \code{grid_method}: "linear" or "quadratic" (default: "quadratic").
+#'   "linear" creates linear spacing on each side of the optimum (may have different spacing
+#'   on left/right sides if optimum is off-center). "quadratic" uses quadratic transformation
+#'   for denser sampling near the optimum with progressively wider spacing away from it.
 #'   \item \code{grid_points}: Number of grid points per parameter (default: 100)
 #'   \item \code{max_grid_range_multiplier}: Controls the width of the profiling grid as a
 #'   fraction of the total parameter range defined by bounds. The grid is centered around
@@ -124,7 +125,7 @@
 #'   negLogLikelihood = quadratic_likelihood,
 #'   bounds = bounds,
 #'   profile_options = list(
-#'     grid_method = "adaptive",
+#'     grid_method = "quadratic",
 #'     grid_points = 15,  # Small grid for quick execution
 #'     max_grid_range_multiplier = 1.0
 #'   ),
@@ -215,7 +216,7 @@ computeLikelihoodProfiles = function(params_current,
 
   # Set default profile options
   default_options = list(
-    grid_method = "adaptive",
+    grid_method = "quadratic",
     grid_points = 100,
     max_grid_range_multiplier = 2.0,
     ll_ratio_threshold = stats::qchisq(0.95, 1),  # 95% CI for chi-square with 1 df
@@ -429,7 +430,7 @@ validateAndSetupOptimizer = function(optimizer, optim_options = list(), bounds =
 validateProfileOptions = function(profile_options, generateData = NULL, negLogLikelihood = NULL) {
 
   # Validate grid_method
-  valid_grid_methods = c("uniform", "adaptive")
+  valid_grid_methods = c("linear", "quadratic")
   if (!profile_options$grid_method %in% valid_grid_methods) {
     stop(sprintf("Error in validateProfileOptions: profile_options$grid_method must be one of: %s. Got: '%s'",
                  paste(valid_grid_methods, collapse = ", "), profile_options$grid_method))
@@ -979,10 +980,10 @@ createParameterGrid = function(param_index, params_current, bounds, profile_opti
     grid_lower = max(lower_bound, grid_upper - max_range)
   }
 
-  if (profile_options$grid_method == "uniform") {
-    grid_values = createUniformGrid(grid_lower, grid_upper, current_value, profile_options$grid_points)
-  } else if (profile_options$grid_method == "adaptive") {
-    grid_values = createAdaptiveGrid(grid_lower, grid_upper, current_value, profile_options$grid_points)
+  if (profile_options$grid_method == "linear") {
+    grid_values = createLinearGrid(grid_lower, grid_upper, current_value, profile_options$grid_points)
+  } else if (profile_options$grid_method == "quadratic") {
+    grid_values = createQuadraticGrid(grid_lower, grid_upper, current_value, profile_options$grid_points)
   } else {
     stop(sprintf("Error in createParameterGrid: Unknown grid method: %s", profile_options$grid_method))
   }
@@ -997,29 +998,40 @@ createParameterGrid = function(param_index, params_current, bounds, profile_opti
   )
 }
 
-#' Create Uniform Grid
+#' Create Linear Grid
+#'
+#' Creates a grid with linear spacing on each side of the current value (optimum).
+#' Left side: linear spacing from `grid_lower` to `current_value`.
+#' Right side: linear spacing from `current_value` to `grid_upper`.
+#' Note: spacing may differ between left and right sides when `current_value` is off-center.
 #'
 #' @param grid_lower Lower bound for grid
 #' @param grid_upper Upper bound for grid
+#' @param current_value Center value for grid construction
 #' @param n_points Number of grid points
-#' @return Numeric vector of uniformly spaced grid values
+#' @return Numeric vector with linear spacing on each side of `current_value`
 #' @keywords internal
-createUniformGrid = function(grid_lower, grid_upper, current_value, n_points) {
+createLinearGrid = function(grid_lower, grid_upper, current_value, n_points) {
   res_grid = c(seq(grid_lower, current_value, length.out = floor(n_points/2) + 1),
                seq(current_value, grid_upper, length.out = floor(n_points/2) + 1))
 
   unique(res_grid)
 }
 
-#' Create Adaptive Grid
+#' Create Quadratic Grid
+#'
+#' Creates a grid with quadratic spacing that is denser near the current value (optimum).
+#' Uses quadratic transformation t^2 to create progressively wider spacing
+#' as distance from current value increases. Provides symmetric behavior regardless
+#' of current value position within bounds.
 #'
 #' @param grid_lower Lower bound for grid
 #' @param grid_upper Upper bound for grid
 #' @param center_value Central value for denser sampling
 #' @param n_points Number of grid points
-#' @return Numeric vector of adaptively spaced grid values
+#' @return Numeric vector with quadratic spacing (dense near `center_value`)
 #' @keywords internal
-createAdaptiveGrid = function(grid_lower, grid_upper, center_value, n_points) {
+createQuadraticGrid = function(grid_lower, grid_upper, center_value, n_points) {
 
   # Create quadratic spacing for denser sampling near center
   n_half = floor(n_points/2) + 1

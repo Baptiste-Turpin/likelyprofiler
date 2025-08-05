@@ -28,7 +28,7 @@
 #' @section Key Features:
 #' * **Multiple optimizers**: Supports \code{\link[stats]{optim}}, \code{\link[DEoptim]{DEoptim}}, and custom optimization functions.
 #' * **Bootstrap thresholds**: Data-driven confidence thresholds using bootstrap likelihood ratio tests
-#' * **Grid methods**: Uniform and adaptive grid spacing for parameter exploration
+#' * **Grid methods**: Linear and quadratic grid spacing for parameter exploration
 #' * **Parallel computation**: Optional cluster-based parallel execution for faster computation
 #' * **Robust validation**: Comprehensive input validation and error handling
 #' * **Flexible configuration**: Customizable grid parameters, optimization options, and confidence levels
