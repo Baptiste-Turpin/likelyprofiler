@@ -6,4 +6,6 @@ before_script:
 
 check:
   script:
-    - R CMD check .
+    - R CMD build .
+    - R CMD check --as-cran likelyprofiler_*.tar.gz
+
