@@ -1,0 +1,18 @@
+image: rocker/r-ver:latest  # Use an R Docker image
+
+variables:
+  _R_CHECK_CRAN_INCOMING_: false
+  R_LIBS_USER: "/usr/local/lib/R/site-library"
+
+before_script:
+  - apt-get update && apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev pandoc
+  - R -e 'install.packages(c("devtools", "roxygen2", "testthat", "remotes"), repos = "https://cloud.r-project.org")'
+  - R -e 'devtools::install_deps(dependencies = TRUE)'
+
+check:
+  script:
+    - R CMD check .
+  artifacts:
+    paths:
+      - *.Rcheck
+    expire_in: 1 week
