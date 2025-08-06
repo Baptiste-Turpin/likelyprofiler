@@ -1,5 +1,8 @@
 image: rocker/verse:latest
 
+variables:
+  R_LIBS_USER: "/usr/local/lib/R/site-library"
+
 stages:
   - check
   - tests
@@ -10,6 +13,10 @@ before_script:
 full_check:
   stage: check
   script:
+    - |
+      apt-get update && apt-get install -yq \
+        texlive-fonts-recommended \
+        tidy
     - R CMD build .
     - R CMD check --as-cran likelyprofiler_*.tar.gz
   rules:
