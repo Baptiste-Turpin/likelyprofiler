@@ -5,8 +5,6 @@ Authors@R: c(
     person("Baptiste", "Turpin", , "t.baptiste0@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-8853-8718"))
   )
-Author: Baptiste Turpin [aut, cre]
-Maintainer: Baptiste Turpin <t.baptiste0@gmail.com>
 Description: Computes profile likelihood confidence intervals with support for
     multiple optimization algorithms ('optim', 'DEoptim', custom optimizers),
     bootstrap likelihood ratio tests, and parallel computation.
