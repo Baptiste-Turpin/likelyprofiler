@@ -1,5 +1,9 @@
 image: rocker/verse:latest
 
+stages:
+  - check
+  - tests
+
 before_script:
   - R -e 'devtools::install_deps(dependencies = TRUE)'
 
@@ -12,7 +16,7 @@ full_check:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
 light_check:
-  stage: check
+  stage: tests
   script:
     - Rscript -e 'devtools::test()'
   rules:
