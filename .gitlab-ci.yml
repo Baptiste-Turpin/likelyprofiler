@@ -16,7 +16,9 @@ full_check:
     - |
       apt-get update && apt-get install -yq \
         texlive-fonts-recommended \
-        tidy
+        tidy \
+        libv8-dev
+    - R -e 'install.packages(c("V8"), repos = "https://cloud.r-project.org")'
     - R CMD build .
     - R CMD check --as-cran likelyprofiler_*.tar.gz
   rules:
