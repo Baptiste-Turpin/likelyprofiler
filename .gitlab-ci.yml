@@ -12,7 +12,3 @@ before_script:
 check:
   script:
     - R CMD check .
-  artifacts:
-    paths:
-      - *.Rcheck
-    expire_in: 1 week
