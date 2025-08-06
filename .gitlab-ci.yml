@@ -1,23 +1,19 @@
-image: rocker/tidyverse
+image: rocker/verse:latest
 
 before_script:
-  - |
-    apt-get update && apt-get install -yq \
-      texlive \
-      texlive-latex-base \
-      texlive-fonts-recommended \
-      texlive-latex-recommended \
-      texlive-latex-extra \
-      texlive-fonts-extra \
-      tidy \
-      libv8-dev \
-      qpdf
-  - R -e 'install.packages(c("V8"), repos = "https://cloud.r-project.org")'
   - R -e 'devtools::install_deps(dependencies = TRUE)'
 
-check:
+full_check:
+  stage: check
   script:
     - R CMD build .
     - R CMD check --as-cran likelyprofiler_*.tar.gz
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
+
+light_check:
+  stage: run_tests
+  script:
+    - Rscript -e 'devtools::test()'
+  rules:
+    - if: '$CI_COMMIT_BRANCH != "main"'
