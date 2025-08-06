@@ -1,6 +1,7 @@
 image: rocker/tidyverse
 
 before_script:
+  - apt-get update && apt-get install -y texlive texlive-latex-base texlive-fonts-recommended texlive-latex-recommended texlive-latex-extra qpdf
   - R -e 'devtools::install_deps(dependencies = TRUE)'
 
 check:
