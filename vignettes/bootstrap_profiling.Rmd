@@ -118,6 +118,8 @@ result_bootstrap = computeLikelihoodProfiles(
   dataset = data_normal,
   verbose = FALSE
 )
+
+parallel::stopCluster(cluster)
 ```
 
 ## Plot results

@@ -1414,7 +1414,7 @@ issueConsolidatedWarnings = function(profiles, n_params) {
   }
 
   if (length(few_within_threshold_params) > 0) {
-    warning(sprintf("Warning in computeLikelihoodProfiles: Few grid points (<3) within threshold for parameter(s): %s. Consider adjusting profiling options.",
+    warning(sprintf("Warning in computeLikelihoodProfiles: Few grid points (<3) within threshold for parameter(s): %s. Confidence intervals may be unreliable. Consider using a finer grid or a different grid method.",
                     paste(few_within_threshold_params, collapse = ", ")), call. = FALSE)
   }
 }
