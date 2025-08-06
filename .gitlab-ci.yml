@@ -12,7 +12,7 @@ full_check:
     - if: '$CI_COMMIT_BRANCH == "main"'
 
 light_check:
-  stage: run_tests
+  stage: check
   script:
     - Rscript -e 'devtools::test()'
   rules:
