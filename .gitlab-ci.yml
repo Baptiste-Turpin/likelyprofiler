@@ -1,11 +1,5 @@
 image: rocker/tidyverse
 
-before_script:
-  - apt-get update && apt-get install -y locales
-  - locale-gen en_US.UTF-8
-  - export LANG=en_US.UTF-8
-  - export LC_ALL=en_US.UTF-8
-
 check:
   script:
     - R CMD check .
