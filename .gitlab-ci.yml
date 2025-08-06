@@ -1,7 +1,8 @@
 image: rocker/tidyverse
 
 before_script:
-  - apt-get update && apt-get install -y \
+  - |
+    apt-get update && apt-get install -y \
       texlive \
       texlive-latex-base \
       texlive-fonts-recommended \
@@ -14,9 +15,7 @@ before_script:
   - R -e 'install.packages(c("V8"), repos = "https://cloud.r-project.org")'
   - R -e 'devtools::install_deps(dependencies = TRUE)'
 
-
 check:
   script:
     - R CMD build .
     - R CMD check --as-cran likelyprofiler_*.tar.gz
-
