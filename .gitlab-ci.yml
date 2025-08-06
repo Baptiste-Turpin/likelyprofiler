@@ -2,8 +2,6 @@ image: rocker/tidyverse
 
 before_script:
   - apt-get update && apt-get install -y \
-      libcurl4-openssl-dev libssl-dev libxml2-dev \
-      pandoc locales \
       texlive \
       texlive-latex-base \
       texlive-fonts-recommended \
