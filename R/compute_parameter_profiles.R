@@ -312,9 +312,9 @@ computeLikelihoodProfiles = function(params_current,
     cat(sprintf("Successfully computed %d/%d parameter profiles.\n",
                 successful_profiles, n_params))
 
-    # Issue consolidated warnings
-    issueConsolidatedWarnings(profiles, n_params)
   }
+  # Issue consolidated warnings
+  issueConsolidatedWarnings(profiles, n_params)
 
   # Validate results
   validateProfileResults(profiles, confidence_intervals, n_params, verbose)

@@ -53,19 +53,23 @@ test_that("Bootstrap integration with computeLikelihoodProfiles works", {
   setup = setup_normal_bootstrap()
 
   # Test with minimal settings for speed
-  result_bootstrap = computeLikelihoodProfiles(
-    params_current = setup$ml_params,
-    negLogLikelihood = setup$negLogLik,
-    bounds = setup$bounds,
-    profile_options = list(
-      grid_points = 5,  # Very small for speed
-      threshold_method = "bootstrap",
-      bootstrap_conf_level = 0.95,
-      n_bootstrap = 10  # Very small for speed
-    ),
-    generateData = setup$generateData,
-    dataset = setup$data,
-    verbose = FALSE
+  expect_warning({
+    result_bootstrap = computeLikelihoodProfiles(
+      params_current = setup$ml_params,
+      negLogLikelihood = setup$negLogLik,
+      bounds = setup$bounds,
+      profile_options = list(
+        grid_points = 5,  # Very small for speed
+        threshold_method = "bootstrap",
+        bootstrap_conf_level = 0.95,
+        n_bootstrap = 10  # Very small for speed
+      ),
+      generateData = setup$generateData,
+      dataset = setup$data,
+      verbose = FALSE
+    )},
+    "Warning in computeLikelihoodProfiles: Few grid points \\(<3\\) within threshold for parameter\\(s\\): .* Confidence intervals may be unreliable. Consider using a finer grid or a different grid method.",
+    perl = TRUE
   )
 
   # Test structure
@@ -87,18 +91,22 @@ test_that("Bootstrap integration with computeLikelihoodProfiles works", {
 test_that("Bootstrap statistics collection works", {
   setup = setup_normal_bootstrap()
 
-  result = computeLikelihoodProfiles(
-    params_current = setup$ml_params,
-    negLogLikelihood = setup$negLogLik,
-    bounds = setup$bounds,
-    profile_options = list(
-      grid_points = 3,  # Minimal for speed
-      threshold_method = "bootstrap",
-      n_bootstrap = 5   # Minimal for speed
-    ),
-    generateData = setup$generateData,
-    dataset = setup$data,
-    verbose = FALSE
+  expect_warning({
+    result = computeLikelihoodProfiles(
+      params_current = setup$ml_params,
+      negLogLikelihood = setup$negLogLik,
+      bounds = setup$bounds,
+      profile_options = list(
+        grid_points = 3,  # Minimal for speed
+        threshold_method = "bootstrap",
+        n_bootstrap = 5   # Minimal for speed
+      ),
+      generateData = setup$generateData,
+      dataset = setup$data,
+      verbose = FALSE
+    )},
+    "Warning in computeLikelihoodProfiles: Few grid points \\(<3\\) within threshold for parameter\\(s\\): .* Confidence intervals may be unreliable. Consider using a finer grid or a different grid method.",
+    perl = TRUE
   )
 
   # Test array structure
@@ -129,34 +137,42 @@ test_that("generateData function integration works", {
 test_that("Bootstrap works with fixed threshold method for comparison", {
   setup = setup_normal_bootstrap()
 
-  # Fixed method
-  result_fixed = computeLikelihoodProfiles(
-    params_current = setup$ml_params,
-    negLogLikelihood = setup$negLogLik,
-    bounds = setup$bounds,
-    profile_options = list(
-      grid_points = 5,
-      threshold_method = "fixed",
-      ll_ratio_threshold = qchisq(0.95, 1)
-    ),
-    dataset = setup$data,
-    verbose = FALSE
+  expect_warning({
+    # Fixed method
+    result_fixed = computeLikelihoodProfiles(
+      params_current = setup$ml_params,
+      negLogLikelihood = setup$negLogLik,
+      bounds = setup$bounds,
+      profile_options = list(
+        grid_points = 5,
+        threshold_method = "fixed",
+        ll_ratio_threshold = qchisq(0.95, 1)
+      ),
+      dataset = setup$data,
+      verbose = FALSE
+    )},
+    "Warning in computeLikelihoodProfiles: Few grid points \\(<3\\) within threshold for parameter\\(s\\): .* Confidence intervals may be unreliable. Consider using a finer grid or a different grid method.",
+    perl = TRUE
   )
 
-  # Bootstrap method
-  result_bootstrap = computeLikelihoodProfiles(
-    params_current = setup$ml_params,
-    negLogLikelihood = setup$negLogLik,
-    bounds = setup$bounds,
-    profile_options = list(
-      grid_points = 5,
-      threshold_method = "bootstrap",
-      bootstrap_conf_level = 0.95,
-      n_bootstrap = 10
-    ),
-    generateData = setup$generateData,
-    dataset = setup$data,
-    verbose = FALSE
+  expect_warning({
+    # Bootstrap method
+    result_bootstrap = computeLikelihoodProfiles(
+      params_current = setup$ml_params,
+      negLogLikelihood = setup$negLogLik,
+      bounds = setup$bounds,
+      profile_options = list(
+        grid_points = 5,
+        threshold_method = "bootstrap",
+        bootstrap_conf_level = 0.95,
+        n_bootstrap = 10
+      ),
+      generateData = setup$generateData,
+      dataset = setup$data,
+      verbose = FALSE
+    )},
+    "Warning in computeLikelihoodProfiles: Few grid points \\(<3\\) within threshold for parameter\\(s\\): .* Confidence intervals may be unreliable. Consider using a finer grid or a different grid method.",
+    perl = TRUE
   )
 
   # Both should have similar structure

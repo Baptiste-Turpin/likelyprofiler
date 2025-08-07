@@ -4,17 +4,21 @@ test_that("Different profile options work", {
   setup = setup_gaussian_mixture(d = 3)
 
   # Test linear grid
-  result_linear = computeLikelihoodProfiles(
-    params_current = setup$optimized_params,
-    negLogLikelihood = setup$mlogf,
-    bounds = setup$bounds,
-    profile_options = list(
-      grid_method = "linear",
-      grid_points = 6,
-      ll_ratio_threshold = 3.84
-    ),
-    verbose = FALSE,
-    gamma = setup$gamma
+  expect_warning({
+    result_linear = computeLikelihoodProfiles(
+      params_current = setup$optimized_params,
+      negLogLikelihood = setup$mlogf,
+      bounds = setup$bounds,
+      profile_options = list(
+        grid_method = "linear",
+        grid_points = 6,
+        ll_ratio_threshold = 3.84
+      ),
+      verbose = FALSE,
+      gamma = setup$gamma
+    )},
+    "Warning in computeLikelihoodProfiles: Few grid points \\(<3\\) within threshold for parameter\\(s\\): .* Confidence intervals may be unreliable. Consider using a finer grid or a different grid method.",
+    perl = TRUE
   )
 
   # Test quadratic grid

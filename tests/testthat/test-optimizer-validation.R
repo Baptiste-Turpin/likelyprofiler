@@ -39,7 +39,7 @@ test_that("Optimizer validation works correctly", {
       negLogLikelihood = setup$mlogf,
       bounds = setup$bounds,
       optimizer = good_optimizer,
-      profile_options = list(grid_points = 5),  # Small for speed
+      profile_options = list(grid_points = 10),  # Small for speed
       verbose = FALSE,
       gamma = setup$gamma
     )
@@ -97,16 +97,21 @@ test_that("DEoptim optimizer works if available", {
   if (requireNamespace("DEoptim", quietly = TRUE)) {
     setup = setup_gaussian_mixture(d = 2)
 
-    result = computeLikelihoodProfiles(
-      params_current = setup$optimized_params,
-      negLogLikelihood = setup$mlogf,
-      bounds = setup$bounds,
-      optimizer = "deoptim",
-      optim_options = list(itermax = 20, NP = 10, trace = FALSE),  # Small for speed, disable trace
-      profile_options = list(grid_points = 4),
-      verbose = FALSE,
-      gamma = setup$gamma
+    expect_warning({
+      result = computeLikelihoodProfiles(
+        params_current = setup$optimized_params,
+        negLogLikelihood = setup$mlogf,
+        bounds = setup$bounds,
+        optimizer = "deoptim",
+        optim_options = list(itermax = 20, NP = 10, trace = FALSE),  # Small for speed, disable trace
+        profile_options = list(grid_points = 4),
+        verbose = FALSE,
+        gamma = setup$gamma
+      )},
+      "Warning in computeLikelihoodProfiles: Few grid points \\(<3\\) within threshold for parameter\\(s\\): .* Confidence intervals may be unreliable. Consider using a finer grid or a different grid method.",
+      perl = TRUE
     )
+
 
     expect_true(is.list(result))
     expect_equal(result$optimizer, "deoptim")

@@ -3,14 +3,18 @@
 test_that("Edge cases are handled correctly", {
   setup = setup_gaussian_mixture(d = 2)
 
-  # Test with very small grid
-  result_small = computeLikelihoodProfiles(
-    params_current = setup$optimized_params,
-    negLogLikelihood = setup$mlogf,
-    bounds = setup$bounds,
-    profile_options = list(grid_points = 3),
-    verbose = FALSE,
-    gamma = setup$gamma
+  expect_warning({
+    # Test with very small grid
+    result_small = computeLikelihoodProfiles(
+      params_current = setup$optimized_params,
+      negLogLikelihood = setup$mlogf,
+      bounds = setup$bounds,
+      profile_options = list(grid_points = 3),
+      verbose = FALSE,
+      gamma = setup$gamma
+    )},
+    "Warning in computeLikelihoodProfiles: Few grid points \\(<3\\) within threshold for parameter\\(s\\): .* Confidence intervals may be unreliable. Consider using a finer grid or a different grid method.",
+    perl = TRUE
   )
 
   expect_true(is.list(result_small))
@@ -32,13 +36,17 @@ test_that("Edge cases are handled correctly", {
   # Test with parameters exactly on the boundary (should be allowed)
   boundary_exact_params = c(-2.0, 2.0)  # Exactly on bounds
 
-  result_boundary_exact = computeLikelihoodProfiles(
-    params_current = boundary_exact_params,
-    negLogLikelihood = setup$mlogf,
-    bounds = setup$bounds,
-    profile_options = list(grid_points = 5, ll_ratio_threshold = 50),
-    verbose = FALSE,
-    gamma = setup$gamma
+  expect_warning({
+    result_boundary_exact = computeLikelihoodProfiles(
+      params_current = boundary_exact_params,
+      negLogLikelihood = setup$mlogf,
+      bounds = setup$bounds,
+      profile_options = list(grid_points = 5, ll_ratio_threshold = 50),
+      verbose = FALSE,
+      gamma = setup$gamma
+    )},
+    "Grid too narrow to capture confidence interval bounds for parameter\\(s\\): .* Consider increasing max_grid_range_multiplier",
+    perl = TRUE
   )
 
   expect_true(is.list(result_boundary_exact))
@@ -51,18 +59,18 @@ test_that("Grid too narrow warning is properly issued", {
   # Capture warnings during profiling with small grid and flat likelihood
   expect_warning(
     {
-    result_narrow = computeLikelihoodProfiles(
-      params_current = setup$optimized_params,
-      negLogLikelihood = setup$mlogf,
-      bounds = setup$bounds,
-      profile_options = list(
-        grid_points = 5,  # Small grid
-        max_grid_range_multiplier = 0.1,  # Very narrow grid range
-        ll_ratio_threshold = 3.84
-      ),
-      verbose = TRUE,  # Enable warnings
-      gamma = setup$gamma
-    )},
+      result_narrow = computeLikelihoodProfiles(
+        params_current = setup$optimized_params,
+        negLogLikelihood = setup$mlogf,
+        bounds = setup$bounds,
+        profile_options = list(
+          grid_points = 5,  # Small grid
+          max_grid_range_multiplier = 0.1,  # Very narrow grid range
+          ll_ratio_threshold = 3.84
+        ),
+        verbose = FALSE,
+        gamma = setup$gamma
+      )},
     "Grid too narrow to capture confidence interval bounds for parameter\\(s\\): .* Consider increasing max_grid_range_multiplier",
     perl = TRUE
   )
