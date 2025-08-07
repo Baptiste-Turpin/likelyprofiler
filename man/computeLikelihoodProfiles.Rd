@@ -71,10 +71,11 @@ parallel using a grid-based approach with customizable optimization methods.
 \details{
 The \code{profile_options} list can contain:
 \itemize{
-\item \code{grid_method}: "linear" or "quadratic" (default: "quadratic").
+\item \code{grid_method}: "linear", "quadratic", or "adaptive" (default: "quadratic").
 "linear" creates linear spacing on each side of the optimum (may have different spacing
 on left/right sides if optimum is off-center). "quadratic" uses quadratic transformation
 for denser sampling near the optimum with progressively wider spacing away from it.
+"adaptive" uses iterative refinement to focus grid points near confidence interval boundaries.
 \item \code{grid_points}: Number of grid points per parameter (default: 100)
 \item \code{max_grid_range_multiplier}: Controls the width of the profiling grid as a
 fraction of the total parameter range defined by bounds. The grid is centered around
@@ -90,6 +91,9 @@ When "fixed", uses \code{ll_ratio_threshold} directly. When "bootstrap",
 uses empirical thresholds from bootstrap datasets.
 \item \code{bootstrap_conf_level}: Confidence level for bootstrap thresholds (default: 0.95)
 \item \code{n_bootstrap}: Number of bootstrap samples for empirical threshold computation (default: 500)
+\item \code{adaptive_max_iterations}: Maximum refinement iterations for adaptive grids (default: 3)
+\item \code{adaptive_initial_fraction}: Fraction of total points for initial grid (default: 0.3)
+\item \code{adaptive_refinement_fraction}: Fraction of remaining points per iteration (default: 0.5)
 
 }
 

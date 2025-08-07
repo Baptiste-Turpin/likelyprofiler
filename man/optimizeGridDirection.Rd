@@ -22,7 +22,8 @@ optimizeGridDirection(
   nested_cluster = NULL,
   generateData = NULL,
   param_bootstrap_stats = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  adaptive_config = NULL
 )
 }
 \arguments{
