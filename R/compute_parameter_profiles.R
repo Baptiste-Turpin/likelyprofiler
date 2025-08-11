@@ -1307,23 +1307,23 @@ identifyRefinementRegions = function(current_grid, profile_costs, lrt_thresholds
   refinement_regions = list()
   region_count = 0
 
-  # Method 1: Focus on threshold crossing regions
-  for (i in seq_len(length(sorted_grid) - 1)) {
-    if (!is.na(ll_ratios[i]) && !is.na(ll_ratios[i+1])) {
-      current_threshold = lrt_thresholds[sorted_indices[i]]
-      next_threshold = lrt_thresholds[sorted_indices[i+1]]
+  # Method 1: Focus on threshold crossing regions using helper function
+  threshold_vec = lrt_thresholds[sorted_indices]
+  crossing_points = findCrossings(sorted_grid, ll_ratios, threshold_vec)
 
-      # Check for threshold crossing (CI boundary region)
-      if ((ll_ratios[i] <= current_threshold && ll_ratios[i+1] > next_threshold) ||
-          (ll_ratios[i] > current_threshold && ll_ratios[i+1] <= next_threshold)) {
-
+  # Convert crossings to refinement regions
+  for (crossing in crossing_points) {
+    # Find the interval that contains this crossing
+    for (i in seq_len(length(sorted_grid) - 1)) {
+      if (sorted_grid[i] <= crossing && crossing <= sorted_grid[i+1]) {
         region_count = region_count + 1
         refinement_regions[[region_count]] = list(
-          center = (sorted_grid[i] + sorted_grid[i+1]) / 2,
-          width = abs(sorted_grid[i+1] - sorted_grid[i]) * 2,  # Expand around crossing
+          center = crossing,  # Use the precise crossing point
+          width = abs(sorted_grid[i+1] - sorted_grid[i]),
           importance = 1.0,  # High importance for CI boundaries
           reason = "threshold_crossing"
         )
+        break
       }
     }
   }
@@ -1339,7 +1339,7 @@ identifyRefinementRegions = function(current_grid, profile_costs, lrt_thresholds
         refinement_regions[[region_count]] = list(
           center = (sorted_grid[i] + sorted_grid[i+1]) / 2,
           width = grid_gaps[i],
-          importance = 0.5,  # Medium importance for gap filling
+          importance = 0.1,  # Less importance for gap filling
           reason = "large_gap"
         )
       }
@@ -1404,15 +1404,18 @@ createRefinementPoints = function(current_grid, profile_costs, lrt_thresholds,
       # Use quadratic spacing within the region for better distribution
       region_points = createQuadraticGrid(region_lower, region_upper, region$center, points_for_region)
 
+      new_points = c(new_points, region_points)
+      points_allocated = points_allocated + points_for_region
+      # Removed min distance as it defeats the purpose as is. Might consider using alternative.
       # Filter out points too close to existing ones
-      min_distance = min(diff(sort(current_grid)), na.rm = TRUE) / 4  # Minimum separation
-      for (point in region_points) {
-        if (all(abs(current_grid - point) > min_distance) && all(abs(new_points - point) > min_distance)) {
-          new_points = c(new_points, point)
-          points_allocated = points_allocated + 1
-          if (points_allocated >= n_new_points) break
-        }
-      }
+      # min_distance = min(diff(sort(current_grid)), na.rm = TRUE) / 4  # Minimum separation
+      # for (point in region_points) {
+      #   if (all(abs(current_grid - point) > min_distance) && all(abs(new_points - point) > min_distance)) {
+      #     new_points = c(new_points, point)
+      #     points_allocated = points_allocated + 1
+      #     if (points_allocated >= n_new_points) break
+      #   }
+      # }
     }
   }
 
@@ -1592,6 +1595,52 @@ evaluateConditionalCost = function(free_params, param_index, fixed_value,
   res
 }
 
+#' Find Threshold Crossings in Profile Data
+#'
+#' Helper function that finds where likelihood ratios cross thresholds.
+#' Uses interpolation for accurate crossing point estimation.
+#'
+#' @param sorted_grid Sorted grid parameter values
+#' @param ll_ratios Likelihood ratio values (same order as sorted_grid)
+#' @param lrt_threshold_vec Threshold values for each grid point (same order as sorted_grid)
+#' @return Numeric vector of crossing points
+#' @keywords internal
+findCrossings = function(sorted_grid, ll_ratios, lrt_threshold_vec) {
+
+  if (length(sorted_grid) < 2) return(numeric(0))
+
+  n_grid_values = length(sorted_grid)
+  crossings = c()
+
+  for (i in seq_len(n_grid_values-1)) {
+    # Check if threshold is crossed between points i and i+1
+    current_threshold = lrt_threshold_vec[i]
+    next_threshold = lrt_threshold_vec[i+1]
+
+    if (!is.na(ll_ratios[i]) && !is.na(ll_ratios[i+1]) &&
+        !is.na(current_threshold) && !is.na(next_threshold)) {
+
+      if ((ll_ratios[i] <= current_threshold && ll_ratios[i+1] > next_threshold) ||
+          (ll_ratios[i] > current_threshold && ll_ratios[i+1] <= next_threshold)) {
+
+        # For bootstrap case, use simple midpoint interpolation
+        # For fixed threshold case, use linear interpolation
+        if (current_threshold == next_threshold && abs(ll_ratios[i+1] - ll_ratios[i]) > 1e-10) {
+          # Original linear interpolation for fixed threshold
+          t = (current_threshold - ll_ratios[i]) / (ll_ratios[i+1] - ll_ratios[i])
+          crossing_point = sorted_grid[i] + t * (sorted_grid[i+1] - sorted_grid[i])
+        } else {
+          # Simple midpoint interpolation for bootstrap case
+          crossing_point = (sorted_grid[i] + sorted_grid[i+1]) / 2
+        }
+        crossings = c(crossings, crossing_point)
+      }
+    }
+  }
+
+  return(crossings)
+}
+
 #' Extract Confidence Interval from Profile Data
 #'
 #' Extracts confidence interval bounds from profile likelihood data by finding
@@ -1664,33 +1713,7 @@ findConfidenceBounds = function(grid_values, profile_costs, lrt_threshold_vec, o
   }
 
   # Find crossings where likelihood ratio crosses threshold
-  crossings = c()
-
-  for (i in seq_len(n_grid_values-1)) {
-    # Check if threshold is crossed between points i and i+1
-    current_threshold = lrt_threshold_vec[i]
-    next_threshold = lrt_threshold_vec[i+1]
-
-    if (!is.na(ll_ratios[i]) && !is.na(ll_ratios[i+1]) &&
-        !is.na(current_threshold) && !is.na(next_threshold)) {
-
-      if ((ll_ratios[i] <= current_threshold && ll_ratios[i+1] > next_threshold) ||
-          (ll_ratios[i] > current_threshold && ll_ratios[i+1] <= next_threshold)) {
-
-        # For bootstrap case, use simple midpoint interpolation
-        # For fixed threshold case, use linear interpolation
-        if (current_threshold == next_threshold && abs(ll_ratios[i+1] - ll_ratios[i]) > 1e-10) {
-          # Original linear interpolation for fixed threshold
-          t = (current_threshold - ll_ratios[i]) / (ll_ratios[i+1] - ll_ratios[i])
-          crossing_point = sorted_grid[i] + t * (sorted_grid[i+1] - sorted_grid[i])
-        } else {
-          # Simple midpoint interpolation for bootstrap case
-          crossing_point = (sorted_grid[i] + sorted_grid[i+1]) / 2
-        }
-        crossings = c(crossings, crossing_point)
-      }
-    }
-  }
+  crossings = findCrossings(sorted_grid, ll_ratios, lrt_threshold_vec)
 
   # Handle edge cases
   if (length(crossings) == 0) {
