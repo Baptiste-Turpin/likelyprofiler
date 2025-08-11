@@ -633,8 +633,8 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
 
         new_grid_points = createRefinementPoints(
           current_grid,
-          profile_costs[1:points_used],
-          lrt_threshold_vec[1:points_used],
+          profile_costs,
+          lrt_threshold_vec,
           adaptive_config,
           n_points_this_iter
         )
@@ -644,46 +644,65 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
         }
       }
 
-      # Merge with existing grid and prepare indices
-      grid_start_idx = points_used + 1
-      current_grid = sort(c(current_grid, new_grid_points))
+      # Merge and sort grid with synchronized array reordering
+      merged_grid = c(current_grid, new_grid_points)
+      current_grid_size = length(merged_grid)
 
-      # Find indices of the new points in the merged grid
-      new_point_indices = c()
-      for (point in new_grid_points) {
-        idx = which.min(abs(current_grid - point))
-        new_point_indices = c(new_point_indices, idx)
+      # Extend arrays to accommodate new grid size before reordering
+      if (current_grid_size > length(profile_costs)) {
+        old_size = length(profile_costs)
+        extension_size = current_grid_size - old_size
+
+        # Extend all arrays
+        profile_costs = c(profile_costs, rep(NA, extension_size))
+        lrt_threshold_vec = c(lrt_threshold_vec, rep(profile_options$ll_ratio_threshold, extension_size))
+        optimizer_exit_flags = c(optimizer_exit_flags, rep(NA_character_, extension_size))
+        optimization_success = c(optimization_success, rep(FALSE, extension_size))
+
+        # Extend matrix
+        if (nrow(optimal_params_matrix) < current_grid_size) {
+          additional_rows = current_grid_size - nrow(optimal_params_matrix)
+          optimal_params_matrix = rbind(optimal_params_matrix,
+                                       matrix(NA, nrow = additional_rows, ncol = ncol(optimal_params_matrix)))
+        }
+
+        # Extend bootstrap stats if needed
+        if (!is.null(param_bootstrap_stats) && ncol(param_bootstrap_stats) < current_grid_size) {
+          additional_cols = current_grid_size - ncol(param_bootstrap_stats)
+          param_bootstrap_stats = cbind(param_bootstrap_stats,
+                                       array(NA, dim = c(nrow(param_bootstrap_stats), additional_cols)))
+        }
       }
 
-      grid_indices_this_iter = sort(unique(new_point_indices))
+      # Apply synchronized ordering to grid and ALL arrays
+      grid_order = order(merged_grid)
+      current_grid = merged_grid[grid_order]
+      profile_costs = profile_costs[grid_order]
+      lrt_threshold_vec = lrt_threshold_vec[grid_order]
+      optimizer_exit_flags = optimizer_exit_flags[grid_order]
+      optimization_success = optimization_success[grid_order]
+      optimal_params_matrix = optimal_params_matrix[grid_order, , drop = FALSE]
+      if (!is.null(param_bootstrap_stats)) {
+        param_bootstrap_stats = param_bootstrap_stats[, grid_order, drop = FALSE]
+      }
+
+      # Track which grid positions need optimization (only new points)
+      # Mark positions that correspond to new points as needing optimization
+      old_grid_length = length(current_grid) - length(new_grid_points)
+
+      # After sorting, identify which indices correspond to new points by checking for NA values
+      # (new points will have NA in profile_costs since they haven't been optimized yet)
+      grid_indices_this_iter = which(is.na(profile_costs))
       points_used = points_used + length(new_grid_points)
 
     } else {
       # Static grid: use provided grid_indices
       grid_indices_this_iter = grid_indices
-      current_grid = grid_values
     }
 
     # Execute optimization for current iteration's grid points
     for (j in grid_indices_this_iter) {
-      if (!is.null(adaptive_config)) {
-        # For adaptive grids, j is an index into current_grid
-        if (j < 1 || j > length(current_grid)) {
-          warning(sprintf("Adaptive grid index %d out of bounds (grid length: %d)", j, length(current_grid)))
-          next
-        }
-        current_param_value = current_grid[j]
-
-        # Find the storage index for this point
-        storage_idx = j  # For adaptive, we'll use the grid index directly
-      } else {
-        # For static grids, j is an index into grid_values
-        if (j < 1 || j > length(grid_values)) {
-          stop("Error in optimizeGridDirection: grid index out of bounds")
-        }
-        current_param_value = grid_values[j]
-        storage_idx = j
-      }
+      current_param_value = current_grid[j]
 
       tryCatch({
         result = optimizeConditional(
@@ -697,13 +716,13 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
           nested_cluster = nested_cluster
         )
 
-        profile_costs[storage_idx] = result$cost
-        optimizer_exit_flags[storage_idx] = result$exit_flag
-        optimal_params_matrix[storage_idx, ] = result$optimal_params
+        profile_costs[j] = result$cost
+        optimizer_exit_flags[j] = result$exit_flag
+        optimal_params_matrix[j, ] = result$optimal_params
 
         # Track success for exit flags
         is_success = (result$exit_flag == "success" || result$exit_flag == "direct_evaluation")
-        optimization_success[storage_idx] = is_success
+        optimization_success[j] = is_success
         if (is_success) success_count = success_count + 1
 
         # Update likelihood ratio threshold for this grid point
@@ -721,9 +740,9 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
           generateData = generateData,
           verbose = verbose
         )
-        lrt_threshold_vec[storage_idx] = resultBootstrapLRT$threshold
+        lrt_threshold_vec[j] = resultBootstrapLRT$threshold
         if (profile_options$threshold_method == "bootstrap" && is_success) {
-          param_bootstrap_stats[, storage_idx] = resultBootstrapLRT$lrt_stats
+          param_bootstrap_stats[, j] = resultBootstrapLRT$lrt_stats
         }
 
         # Update warm start for next iteration (warm start strategy)
@@ -734,7 +753,7 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
 
       }, error = function(e) {
         stop(sprintf("Error in optimizeGridDirection: Optimization failed for parameter %d at grid point %d: %s",
-                     param_index, storage_idx, e$message))
+                     param_index, j, e$message))
       })
     }
 
@@ -746,6 +765,19 @@ optimizeGridDirection = function(grid_indices, param_index, grid_values, warm_st
     }
 
     iteration = iteration + 1
+  }
+
+  # Final cleanup and trimming for adaptive grids
+  if (!is.null(adaptive_config)) {
+    final_grid_size = length(current_grid)
+    profile_costs = profile_costs[1:final_grid_size]
+    lrt_threshold_vec = lrt_threshold_vec[1:final_grid_size]
+    optimizer_exit_flags = optimizer_exit_flags[1:final_grid_size]
+    optimal_params_matrix = optimal_params_matrix[1:final_grid_size, , drop = FALSE]
+    optimization_success = optimization_success[1:final_grid_size]
+    if (!is.null(param_bootstrap_stats)) {
+      param_bootstrap_stats = param_bootstrap_stats[, 1:final_grid_size, drop = FALSE]
+    }
   }
 
   # Return results with final_grid for adaptive case
@@ -905,15 +937,15 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
   # Check if this is an adaptive grid configuration
   if (!is.null(grid_result$grid_method) && grid_result$grid_method == "adaptive") {
     # For adaptive grids, we'll pass the configuration to optimizeGridDirection
-    grid_values = c()  # Will be built iteratively
+    current_grid = c()  # Will be built iteratively
     adaptive_config = grid_result
     n_grid = 0  # Will grow during iterations
     max_size = adaptive_config$total_grid_points
   } else {
     # Standard static grid
-    grid_values = grid_result$grid_values
+    current_grid = grid_result$grid_values
     adaptive_config = NULL
-    n_grid = length(grid_values)
+    n_grid = length(current_grid)
     max_size = n_grid
   }
 
@@ -934,7 +966,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
   }
 
   # Initialize arrays
-  profile_costs = numeric(max_size)
+  profile_costs = rep(NA, max_size)
   lrt_threshold_vec = rep(profile_options$ll_ratio_threshold, max_size)
   optimizer_exit_flags = character(max_size)
   optimal_params_matrix = matrix(NA, nrow = max_size, ncol = length(params_current))
@@ -945,7 +977,11 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
   }
 
   # Find the index of the optimal parameter value in the grid
-  optimal_index = which.min(abs(grid_values - params_current[param_index]))
+  if (!is.null(adaptive_config)) {
+    optimal_index = 1  # Will be updated after first iteration
+  } else {
+    optimal_index = which.min(abs(current_grid - params_current[param_index]))
+  }
 
   # Initialize warm start parameters
   warm_start_params = params_current
@@ -959,7 +995,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     adaptive_result = optimizeGridDirection(
       grid_indices = NULL,  # Will be determined iteratively
       param_index = param_index,
-      grid_values = grid_values,  # Empty initially
+      grid_values = current_grid,  # Use current_grid consistently
       warm_start_params = params_current,
       negLogLikelihood = negLogLikelihood,
       bounds = bounds,
@@ -979,7 +1015,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     )
 
     # Extract final results from adaptive optimization
-    grid_values = adaptive_result$final_grid
+    current_grid = adaptive_result$final_grid
     profile_costs = adaptive_result$profile_costs
     lrt_threshold_vec = adaptive_result$lrt_threshold_vec
     optimizer_exit_flags = adaptive_result$optimizer_exit_flags
@@ -987,53 +1023,19 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
     optimization_success = adaptive_result$optimization_success
     success_count = adaptive_result$success_count
     param_bootstrap_stats = adaptive_result$bootstrap_stats
-    n_grid = length(grid_values)
+    n_grid = length(current_grid)
+
+    # Update optimal index for adaptive case
+    optimal_index = which.min(abs(current_grid - params_current[param_index]))
 
   } else {
-    # Static grid optimization
-
-    # Optimize right side (from optimal outward)
-    right_result = optimizeGridDirection(
-      grid_indices = optimal_index:n_grid,
-      param_index = param_index,
-      grid_values = grid_values,
-      warm_start_params = params_current,
-      negLogLikelihood = negLogLikelihood,
-      bounds = bounds,
-      optimizer_info = optimizer_info,
-      likelihood_args = likelihood_args,
-      profile_options = profile_options,
-      profile_costs = profile_costs,
-      lrt_threshold_vec = lrt_threshold_vec,
-      optimizer_exit_flags = optimizer_exit_flags,
-      optimal_params_matrix = optimal_params_matrix,
-      optimization_success = optimization_success,
-      nested_cluster = nested_cluster,
-      generateData = generateData,
-      param_bootstrap_stats = NULL,
-      verbose = verbose
-    )
-
-    # Update arrays with right side results
-    profile_costs = right_result$profile_costs
-    lrt_threshold_vec = right_result$lrt_threshold_vec
-    optimizer_exit_flags = right_result$optimizer_exit_flags
-    optimal_params_matrix = right_result$optimal_params_matrix
-    optimization_success = right_result$optimization_success
-    success_count = success_count + right_result$success_count
-
-    # Collect bootstrap stats for this parameter
-    param_bootstrap_stats = right_result$bootstrap_stats
-
-    # Optimize left side (from optimal outward) - reset warm start
-    # Only happens if the optimal index is not the first grid point
-    # i.e. there is a left side to explore
-    if (optimal_index > 1) {
-      left_result = optimizeGridDirection(
-        grid_indices = seq(optimal_index-1, 1),
+    # Static grid optimization - helper function for shared optimization arguments
+    get_optimization_args = function(grid_indices, warm_start, bootstrap_stats = NULL) {
+      list(
+        grid_indices = grid_indices,
         param_index = param_index,
-        grid_values = grid_values,
-        warm_start_params = params_current,  # Reset to original optimal params
+        grid_values = current_grid,
+        warm_start_params = warm_start,
         negLogLikelihood = negLogLikelihood,
         bounds = bounds,
         optimizer_info = optimizer_info,
@@ -1046,9 +1048,26 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
         optimization_success = optimization_success,
         nested_cluster = nested_cluster,
         generateData = generateData,
-        param_bootstrap_stats = param_bootstrap_stats,
+        param_bootstrap_stats = bootstrap_stats,
         verbose = verbose
       )
+    }
+
+    # Optimize right side (from optimal outward)
+    right_result = do.call(optimizeGridDirection, get_optimization_args(optimal_index:n_grid, params_current))
+
+    # Update arrays and collect bootstrap stats
+    profile_costs = right_result$profile_costs
+    lrt_threshold_vec = right_result$lrt_threshold_vec
+    optimizer_exit_flags = right_result$optimizer_exit_flags
+    optimal_params_matrix = right_result$optimal_params_matrix
+    optimization_success = right_result$optimization_success
+    success_count = success_count + right_result$success_count
+    param_bootstrap_stats = right_result$bootstrap_stats
+
+    # Optimize left side if needed
+    if (optimal_index > 1) {
+      left_result = do.call(optimizeGridDirection, get_optimization_args(seq(optimal_index-1, 1), params_current, param_bootstrap_stats))
 
       # Update arrays with left side results
       profile_costs = left_result$profile_costs
@@ -1057,11 +1076,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
       optimal_params_matrix = left_result$optimal_params_matrix
       optimization_success = left_result$optimization_success
       success_count = success_count + left_result$success_count
-
-      # Merge left side bootstrap stats
-      if (!is.null(left_result$bootstrap_stats) && !is.null(param_bootstrap_stats)) {
-        param_bootstrap_stats = left_result$bootstrap_stats
-      }
+      param_bootstrap_stats = left_result$bootstrap_stats
     }
   } # End of static grid optimization
 
@@ -1073,7 +1088,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
 
   # Check if corresponding cost is below threshold. If not set current params at this index
   # to the minimum observed cost with a warning.
-  optimal_index = which.min(abs(grid_values - params_current[param_index]))  # Update optimal_index for adaptive case
+  optimal_index = which.min(abs(current_grid - params_current[param_index]))  # Use current_grid consistently
   min_cost_index = which.min(profile_costs)
   min_observed_cost = profile_costs[min_cost_index]
   optimal_grid_cost = profile_costs[optimal_index]
@@ -1086,7 +1101,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
                     param_index, ll_ratio_optimal, lrt_threshold_optimal), call. = FALSE)
 
     # Update the profile data to use the best parameters found
-    optimal_param_value = grid_values[min_cost_index]
+    optimal_param_value = current_grid[min_cost_index]
   } else {
     optimal_param_value = params_current[param_index]
   }
@@ -1095,7 +1110,7 @@ computeParameterProfile = function(param_index, params_current, negLogLikelihood
   profile_data = list(
     param_index = param_index,
     optimal_param_value = optimal_param_value,
-    grid_values = grid_values,
+    grid_values = current_grid,  # Always use current_grid as authoritative
     profile_costs = profile_costs,
     lrt_threshold_vec = lrt_threshold_vec,
     optimizer_exit_flags = optimizer_exit_flags,
