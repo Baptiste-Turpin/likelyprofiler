@@ -28,6 +28,6 @@ full_check:
 light_check:
   stage: tests
   script:
-    - Rscript -e 'devtools::test()'
+    - Rscript -e 'devtools::test(stop_on_failure = TRUE, stop_on_warning = TRUE)'
   rules:
     - if: '$CI_COMMIT_BRANCH != "main"'
