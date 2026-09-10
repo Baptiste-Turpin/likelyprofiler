@@ -89,6 +89,14 @@ print(result$summary)
 print(result$confidence_intervals)
 
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/Baptiste-Turpin/likelyprofiler}
+  \item Report bugs at \url{https://github.com/Baptiste-Turpin/likelyprofiler/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Baptiste Turpin \email{t.baptiste0@gmail.com} (\href{https://orcid.org/0000-0001-8853-8718}{ORCID})
 
