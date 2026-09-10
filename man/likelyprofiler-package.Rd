@@ -92,4 +92,9 @@ print(result$confidence_intervals)
 \author{
 \strong{Maintainer}: Baptiste Turpin \email{t.baptiste0@gmail.com} (\href{https://orcid.org/0000-0001-8853-8718}{ORCID})
 
+Authors:
+\itemize{
+  \item Baptiste Turpin \email{t.baptiste0@gmail.com} (\href{https://orcid.org/0000-0001-8853-8718}{ORCID})
+}
+
 }
