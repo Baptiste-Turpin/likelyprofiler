@@ -14,7 +14,7 @@ BugReports: https://github.com/Baptiste-Turpin/likelyprofiler/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Depends:
-    R (>= 4.0.0)
+    R (>= 4.6.1)
 Suggests: 
     rmarkdown,
     knitr,

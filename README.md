@@ -5,7 +5,7 @@ Profile likelihood confidence intervals for parameter uncertainty quantification
 This package provides robust methods for computing profile likelihood confidence intervals using grid-based optimization. Profile likelihood is particularly valuable when asymptotic approximations may be unreliable or when the likelihood surface is non-quadratic. The package supports multiple optimization algorithms including base R's `optim`, `DEoptim`, and custom user-defined optimizers, with optional parallel computation for faster execution. Bootstrap likelihood ratio tests provide data-driven confidence thresholds as an alternative to asymptotic chi-squared approximations.
 
 ## Version
-The package was tested using R version 4.5.0 (2025-04-11).
+The package was tested using R version 4.6.1 (2026-06-24).
 
 ## Installation
 
