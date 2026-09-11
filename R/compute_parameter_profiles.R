@@ -1902,7 +1902,11 @@ validateProfileResults = function(profiles, confidence_intervals, n_params, verb
 createProfileSummary = function(profiles, confidence_intervals, params_current) {
 
   n_params = length(profiles)
-  param_names = names(params_current) %||% paste0("param_", 1:n_params)
+  if (!is.null(names(params_current))){
+    param_names = names(params_current)
+  } else {
+    param_names = paste0("param_", 1:n_params)
+  }
 
   summary_df = data.frame(
     parameter = param_names,
