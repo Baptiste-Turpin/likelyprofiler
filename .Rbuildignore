@@ -7,3 +7,4 @@
 ^NEWS\.md$
 ^\.lintr$
 ^\.gitlab-ci\.yml$
+^\.github$

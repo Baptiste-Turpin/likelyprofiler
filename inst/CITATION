@@ -1,7 +1,7 @@
-citEntry(
-  entry = "Manual",
+bibentry(
+  bibtype = "Manual",
   title = "likelyprofiler: Likelihood Profiles for Nonlinear Objective Functions",
-  author = person("Baptiste", "Turpin", , "t.baptiste0@gmail.com", 
+  author = person("Baptiste", "Turpin", , "t.baptiste0@gmail.com",
                   comment = c(ORCID = "0000-0001-8853-8718")),
   year = "2026",
   url = "https://github.com/Baptiste-Turpin/likelyprofiler",
